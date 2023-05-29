@@ -1,0 +1,140 @@
+
+# Loading packages and functions, etc.
+```{r}
+# Load packages
+pacman::p_load(tidyverse, random, brms)
+
+# Suppress messages for group_by
+options(dplyr.summarise.inform = FALSE)
+
+# Load simulation functions
+dirname(rstudioapi::getActiveDocumentContext()$path)
+source("simulation_functions_talwar.R")
+```
+
+To simulate data with the run_simulation function, specify the following parameters:
+* Model: which model ("frl" or "cafrl")
+* group: group name for the simulated subjects
+* n_correct: criterion of correct trials for moving to next stage
+
+* alpha: generic learning rate (0-1)
+* beta: inverse temperature (0-inf)
+* theta_init: initial dimension weight (-inf to +inf). Only relevant in the cafRL.
+* epsilon: not relevant for fRL and the cafRL models implemented in this script
+
+# Model 1:Feature RL
+```{r}
+# Explore output of different values for the simulation
+params = list(
+  model = "fRL",
+  group = "test",
+  n_correct = 6,
+  alpha = 0.1, 
+  beta = 3,
+  theta_init = NA,
+  epsilon = NA)
+
+# Run simulation with the parameters specified above for n agents with the given seed
+output_fRL = run_simulation(params, 1, 1)
+
+
+
+# Replication of plots in Talwar et al. (2021)
+params = list(
+  model = "fRL",
+  group = "plots",
+  n_correct = 6,
+  alpha = 0.62, 
+  beta = 0.91,
+  theta_init = NA,
+  epsilon = NA)
+
+# Run simulation with specified parameters for 500 agents with seeds from 1-500
+plot_fRL = run_simulation(params, 500, seq(1,500))
+
+# Get number of errors
+errors_fRL = plot_fRL %>% 
+  group_by(group, agent, stage) %>%
+  summarise(error_to_criterion_agent = sum(choice == 0))
+
+# Define stage names for plot
+errors_fRL$stage_name = ifelse(errors_fRL$stage == 1, "1: SD",
+                        ifelse(errors_fRL$stage == 2, "2: SDr",
+                        ifelse(errors_fRL$stage == 3, "3: C-D",
+                        ifelse(errors_fRL$stage == 4, "4: CD",
+                        ifelse(errors_fRL$stage == 5, "5: CDr",
+                        ifelse(errors_fRL$stage == 6, "6: ID",
+                        ifelse(errors_fRL$stage == 7, "7: IDr",
+                        ifelse(errors_fRL$stage == 8, "8: ED",
+                        ifelse(errors_fRL$stage == 9, "9: EDr", NA)))))))))
+
+# Plot
+ggplot(errors_fRL, aes(x = stage_name, y = error_to_criterion_agent)) + 
+  geom_jitter(width = 0.2, size = 0.4, colour = "#9fb1dd") +
+  labs(title ="Replication of error plot for fRL-model") +
+  ylab("Errors") +
+  xlab("Stage") +
+  ylim(-1,20) + 
+  theme_bw() 
+
+# Save plot
+#ggsave("simulation_figures/fRL_error_plot1.png", width = 6, height = 4)
+```
+
+# Model 2: Combined Attention-Modulated Feature RL
+```{r}
+# Explore output of different values for the simulation
+params = list(
+  model = "cafRL",
+  group = "test",
+  n_correct = 6,
+  alpha = 0.1, 
+  beta = 3,
+  theta_init = 1,
+  epsilon = NA)
+
+# Run simulation with the parameters specified above for n agents with the given seed
+test_output_cafRL = run_simulation(params, 1, 1)
+
+
+
+# Replication of plots in Talwar et al. (2021)
+params = list(
+  model = "cafRL",
+  group = "plots",
+  n_correct = 6,
+  alpha = 0.92, 
+  beta = 1.34,
+  theta_init = 1.78,
+  epsilon = NA)
+
+# Run simulation with specified parameters for 500 agents with seeds from 1-500
+plot_cafRL = run_simulation(params, 500, seq(1,500))
+
+# Get number of errors
+errors_cafRL = plot_cafRL %>% 
+  group_by(group, agent, stage) %>%
+  summarise(error_to_criterion_agent = sum(choice == 0))
+
+# Define stage names for plot
+errors_cafRL$stage_name = ifelse(errors_cafRL$stage == 1, "1: SD",
+                          ifelse(errors_cafRL$stage == 2, "2: SDr",
+                          ifelse(errors_cafRL$stage == 3, "3: C-D",
+                          ifelse(errors_cafRL$stage == 4, "4: CD",
+                          ifelse(errors_cafRL$stage == 5, "5: CDr",
+                          ifelse(errors_cafRL$stage == 6, "6: ID",
+                          ifelse(errors_cafRL$stage == 7, "7: IDr",
+                          ifelse(errors_cafRL$stage == 8, "8: ED",
+                          ifelse(errors_cafRL$stage == 9, "9: EDr", NA)))))))))
+
+# Plot
+ggplot(errors_cafRL, aes(x = stage_name, y = error_to_criterion_agent)) + 
+  geom_jitter(width = 0.2, size = 0.4, colour = "#6b86c8") +
+  labs(title ="Replication of error plot for cafRL-model") +
+  ylab("Errors") +
+  xlab("Stage") +
+  theme_bw()
+
+#ggsave("simulation_figures/cafRL_error_plot1.png", width = 6, height = 4)
+```
+

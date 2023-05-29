@@ -1,0 +1,267 @@
+# Script to run models by LN
+
+# Prepare Environment
+```{r}
+# Load packages
+pacman::p_load(tidyverse, 
+               ggplot2, 
+               tictoc, 
+               bayesplot, 
+               cmdstanr)
+
+# Load functions
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../../1-simulation/ln_stageswitch/simulation_functions_ln.R")
+source("../../utils/quality_check_functions.R")
+```
+
+####### FRL #######
+
+# Simulate data
+```{r}
+
+# Parmeters 
+params = list(
+  model = "fRL",
+  group = "test",
+  n_correct = 6,
+  alpha_pos = 0.6,
+  alpha_neg = 0.4,
+  beta = 1,
+  theta_init = NA,
+  epsilon = NA)
+
+# Run simulation
+d = run_simulation(params, 1, 145)
+
+# Prepare data for model
+data <- list(n_trials = nrow(d),
+             stage = d$stage,
+             trial = d$trial,
+             choice = d$choice,
+             stimulus = d$stimulus,
+             alpha_pos_mean = 0,
+             alpha_pos_sd = 1.5,
+             alpha_neg_mean = 0,
+             alpha_neg_sd = 1.5,
+             beta_alpha = 2,
+             beta_beta = 1/2) # inverse scale beta
+```
+
+# Run model in rstan
+```{r}
+# RUN MODEL --------------------
+# Define file
+file <- file.path("../../2-models/ln_stageswitch/1_ln_fRL/ln_fRL_loglik.stan")
+stan_file = rstan::stan_model(file = file, auto_write = T)
+  
+# Fit model
+fit <- rstan::sampling(stan_file, data = data,
+                       seed = 145, refresh = 0,
+                       iter = 3000, warmup = 1000, 
+                       chains = 4, cores = 4, 
+                       control = list(adapt_delta = 0.99, max_treedepth = 20))
+
+
+# DIAGNOSTICS --------------------
+draws_df <- as.data.frame(fit)
+relevant_pars = (colnames(draws_df))[1:13]
+
+# Diagnose
+rstan::check_hmc_diagnostics(fit)
+
+# Summary
+rstan::summary(fit, relevant_pars)$summary
+
+# Chains
+rstan::traceplot(fit, relevant_pars)
+
+# Prior predictive checks
+pp_predictive_hist("prior_pred", fit, d)
+pp_predictive_dens("prior_pred", fit, d, 100)
+
+# Posterior predictive checks
+pp_predictive_hist("posterior_pred", fit, d)
+pp_predictive_dens("posterior_pred", fit, d, 100)
+
+# Prior posterior update in log
+plot_prior_posterior(draws_df, "alpha_pos_prior_log", "alpha_pos_posterior_log", "Alpha Pos Log")
+plot_prior_posterior(draws_df, "alpha_neg_prior_log", "alpha_neg_posterior_log", "Alpha Neg Log")
+
+# Prior posterior update in p
+plot_prior_posterior(draws_df, "alpha_pos_prior_p", "alpha_pos_posterior_p", "Alpha Pos P")
+plot_prior_posterior(draws_df, "alpha_neg_prior_p", "alpha_neg_posterior_p", "Alpha Neg P")
+
+plot_prior_posterior(draws_df, "beta_prior", "beta_posterior", "Beta")
+
+```
+
+####### CA-FRL ALL FREE PARAMETRES #######
+
+# Simulate data
+```{r}
+
+# Parameters
+params = list(
+  model = "cafRL",
+  group = "test",
+  n_correct = 6,
+  alpha_pos = 0.6,
+  alpha_neg = 0.4,
+  beta = 2,
+  theta_init = logit_scaled(0.3),
+  epsilon = NA)
+
+# Run simulation
+d = run_simulation(params, 1, 145)
+
+# Prepare data 
+data <- list(n_trials = nrow(d),
+             stage = d$stage,
+             trial = d$trial,
+             choice = d$choice,
+             stimulus = d$stimulus,
+             alpha_pos_mean = 0,
+             alpha_pos_sd = 1.5,
+             alpha_neg_mean = 0,
+             alpha_neg_sd = 1.5,
+             beta_alpha = 2,
+             beta_beta = 1/2, # inverse scale beta
+             theta0_mean = 0,
+             theta0_sd = 1.5)
+    
+```
+
+# Run model in rstan
+```{r}
+# RUN MODEL --------------------
+# Define file
+file <- file.path("../../2-models/ln_stageswitch/2_ln_cafRL/ln_cafRL_loglik.stan")
+stan_file = rstan::stan_model(file = file, auto_write = T)
+  
+# Fit model
+fit <- rstan::sampling(stan_file, data = data,
+                       seed = 145, refresh = 0,
+                       iter = 3000, warmup = 1000, 
+                       chains = 4, cores = 4, 
+                       control = list(adapt_delta = 0.99, max_treedepth = 20))
+
+
+# DIAGNOSTICS --------------------
+# Get draws and relevant parameters
+draws_df <- as.data.frame(fit)
+relevant_pars = (colnames(draws_df))[1:18]
+
+# Diagnose
+rstan::check_hmc_diagnostics(fit)
+
+# Summary
+rstan::summary(fit, relevant_pars)$summary
+
+# Chains
+rstan::traceplot(fit, relevant_pars)
+
+# Prior predictive checks
+pp_predictive_hist("prior_pred", fit, d)
+pp_predictive_dens("prior_pred", fit, d, 100)
+
+# Posterior predictive checks
+pp_predictive_hist("posterior_pred", fit, d)
+pp_predictive_dens("posterior_pred", fit, d, 100)
+
+# Prior posterior update in log
+plot_prior_posterior(draws_df, "alpha_pos_prior_log", "alpha_pos_posterior_log", "Alpha Pos Log")
+plot_prior_posterior(draws_df, "alpha_neg_prior_log", "alpha_neg_posterior_log", "Alpha Neg Log")
+plot_prior_posterior(draws_df, "theta0_prior_log", "theta0_posterior_log", "Theta0 Log")
+
+# Prior posterior update in p
+plot_prior_posterior(draws_df, "alpha_pos_prior_p", "alpha_pos_posterior_p", "Alpha Pos P")
+plot_prior_posterior(draws_df, "alpha_neg_prior_p", "alpha_neg_posterior_p", "Alpha Neg P")
+plot_prior_posterior(draws_df, "theta0_prior_p", "theta0_posterior_p", "Theta0 P")
+
+plot_prior_posterior(draws_df, "beta_prior", "beta_posterior", "Beta P")
+
+```
+
+####### CA-FRL BETA FIXED #######
+
+# Simulate data
+```{r}
+
+# Parmeters
+params = list(
+  model = "cafRL",
+  group = "test",
+  n_correct = 6,
+  alpha_pos = 0.6,
+  alpha_neg = 0.4,
+  beta = 1,
+  theta_init = logit_scaled(0.3),
+  epsilon = NA)
+
+# Run simulation
+d = run_simulation(params, 1, 1)
+
+# Prepare data 
+data <- list(n_trials = nrow(d),
+             stage = d$stage,
+             trial = d$trial,
+             choice = d$choice,
+             stimulus = d$stimulus,
+             alpha_pos_mean = 0,
+             alpha_pos_sd = 1.5,
+             alpha_neg_mean = 0,
+             alpha_neg_sd = 1.5,
+             theta0_mean = 0,
+             theta0_sd = 1.5,
+             beta = 2)
+    
+```
+
+# Run model in rstan
+```{r}
+# RUN MODEL --------------------
+# Define file
+file <- file.path("../../2-models/ln_stageswitch/2_ln_cafRL/ln_cafRL_alpha_pos_alpha_neg_theta0_loglik.stan")
+stan_file = rstan::stan_model(file = file, auto_write = T)
+  
+# Fit model
+fit <- rstan::sampling(stan_file, data = data,
+                       seed = 145, refresh = 500,
+                       iter = 3000, warmup = 1000, 
+                       chains = 4, cores = 4, 
+                       control = list(adapt_delta = 0.99, max_treedepth = 20))
+
+
+# DIAGNOSTICS --------------------
+draws_df <- as.data.frame(fit)
+relevant_pars = (colnames(draws_df))[1:15]
+
+# Diagnose
+rstan::check_hmc_diagnostics(fit)
+
+# Summary
+rstan::summary(fit, relevant_pars)$summary
+
+# Chains
+rstan::traceplot(fit, relevant_pars)
+
+# Prior predictive checks
+pp_predictive_hist("prior_pred", fit, d)
+pp_predictive_dens("prior_pred", fit, d, 100)
+
+# Posterior predictive checks
+pp_predictive_hist("posterior_pred", fit, d)
+pp_predictive_dens("posterior_pred", fit, d, 100)
+
+# Prior posterior update in log
+plot_prior_posterior(draws_df, "alpha_pos_prior_log", "alpha_pos_posterior_log", "Alpha Pos Log")
+plot_prior_posterior(draws_df, "alpha_neg_prior_log", "alpha_neg_posterior_log", "Alpha Neg Log")
+plot_prior_posterior(draws_df, "theta0_prior_log", "theta0_posterior_log", "Theta0 Log")
+
+# Prior posterior update in p
+plot_prior_posterior(draws_df, "alpha_pos_prior_p", "alpha_pos_posterior_p", "Alpha Pos P")
+plot_prior_posterior(draws_df, "alpha_neg_prior_p", "alpha_neg_posterior_p", "Alpha Neg P")
+plot_prior_posterior(draws_df, "theta0_prior_p", "theta0_posterior_p", "Theta0 P")
+
+```

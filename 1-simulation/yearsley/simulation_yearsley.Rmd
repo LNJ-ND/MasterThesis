@@ -1,0 +1,355 @@
+
+## Load packages and functions, etc.
+```{r}
+# Load packages
+pacman::p_load(comprehenr, purrr, tidyverse)
+
+# Suppress messages for group_by
+options(dplyr.summarise.inform = FALSE)
+
+# Load functions
+dirname(rstudioapi::getActiveDocumentContext()$path)
+source("simulation_functions_yearsley.R")
+```
+
+
+## Replicate figures from Yearsely et al. (2021)
+
+To simulate data with the run_simulation function, specify the following parameters:
+* group: group name for the simulated subjects
+* n_correct: criterion of correct trials for moving to next stage
+
+* f: dimension shift parameter/attention switching parameter (0-1)
+* r: reward learning rate (0-1)
+* p: punishment learning rate (0-1)
+* d: decision consistency (-inf to + inf)
+* lambda: disengagement/focus parameter (0-1)
+* switch1: continuity parameter (0-1)
+* switch2: continuity parameter (0-1)
+
+### FIGURE 2 PLOTS ###
+```{r}
+# Define parameters
+control_params = list(
+  group = "control",
+  n_correct = 6,
+  f = 0.4,
+  r = 0.5,
+  p = 0.5,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+)
+  
+reduced_f_params = list(
+  group = "reduced_f",
+  n_correct = 6,
+  f = 0.1,
+  r = 0.5,
+  p = 0.5,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+  
+)
+
+# Run simulation with the parameters specified above for n agents with the given seed
+control_df = run_simulation(control_params, 1000, seq(1,1000))
+reduced_f_df = run_simulation(reduced_f_params, 1000, seq(1,1000))
+# Combine data for plot of both groups
+combined = rbind(control_df, reduced_f_df)
+
+# Define stage names for plot
+combined$stage_name = ifelse(combined$stage == 1, "1: SD",
+                        ifelse(combined$stage == 2, "2: SDr",
+                        ifelse(combined$stage == 3, "3: C-D",
+                        ifelse(combined$stage == 4, "4: CD",
+                        ifelse(combined$stage == 5, "5: CDr",
+                        ifelse(combined$stage == 6, "6: ID",
+                        ifelse(combined$stage == 7, "7: IDr",
+                        ifelse(combined$stage == 8, "8: ED",
+                        ifelse(combined$stage == 9, "9: EDr", NA)))))))))
+
+# Measures
+# Attrition rate
+attrition = combined %>% filter(stage_completed == 1) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(attrition_rate = length(unique(agent))/1000)
+
+# Errors to criterion
+errors = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(error_to_criterion_agent = sum(choice == 0)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(error_to_criterion = mean(error_to_criterion_agent))
+
+# Trials to criterion
+trials = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(trial_to_criterion_agent = max(trial)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(trial_to_criterion = mean(trial_to_criterion_agent))
+
+
+# Plots
+# Attrition rate
+ggplot(attrition, aes(x = stage_name, y = attrition_rate, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("control" = "red", "reduced_f" = "blue")) +
+  scale_y_continuous(n.breaks = 10, limits = c(0,1)) +
+  ylab("Percent Completing") +
+  xlab("Stage") +
+  ggtitle("Attrition Rate") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+#ggsave(paste0("simulation_figures/fig2_attrition.png"), width = 4, height = 5.5)
+
+
+# Errors to criterion
+ggplot(errors, aes(x = stage_name, y = error_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("control" = "red", "reduced_f" = "blue")) +
+  scale_y_continuous(n.breaks = 11, limits = c(0,10)) +
+  ylab("Errors to Criterion") +
+  xlab("Stage") +
+  ggtitle("Errors") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+#ggsave(paste0("simulation_figures/fig2_errors.png"), width = 4, height = 5.5)
+  
+
+# Trials to criterion
+ggplot(trials, aes(x = stage_name, y = trial_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("control" = "red", "reduced_f" = "blue")) +
+  scale_y_continuous(n.breaks = 7, limits = c(0,31)) +
+  ylab("Trials to Criterion") +
+  xlab("Stage") +
+  ggtitle("Trials") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+#ggsave(paste0("simulation_figures/fig2_trials.png"), width = 4, height = 5.5)
+
+```
+
+### FIGURE 3 PLOTS ###
+```{r}
+# Define paramters
+low_f_params = list(
+  group = "low_f",
+  n_correct = 6,
+  f = 0.1,
+  r = 0.15,
+  p = 0.15,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+)
+  
+high_f_params = list(
+  group = "high_f",
+  n_correct = 6,
+  f = 1,
+  r = 0.15,
+  p = 0.15,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+  
+)
+
+# Run simulation with the parameters specified above for n agents with the given seed
+low_f_df = run_simulation(low_f_params, 1000, seq(1,1000))
+high_f_df = run_simulation(high_f_params, 1000, seq(1,1000))
+# Combine data for plot of both groups
+combined = rbind(low_f_df, high_f_df)
+
+# Define stage names for plot
+combined$stage_name = ifelse(combined$stage == 1, "1: SD",
+                        ifelse(combined$stage == 2, "2: SDr",
+                        ifelse(combined$stage == 3, "3: C-D",
+                        ifelse(combined$stage == 4, "4: CD",
+                        ifelse(combined$stage == 5, "5: CDr",
+                        ifelse(combined$stage == 6, "6: ID",
+                        ifelse(combined$stage == 7, "7: IDr",
+                        ifelse(combined$stage == 8, "8: ED",
+                        ifelse(combined$stage == 9, "9: EDr", NA)))))))))
+
+# Measures
+# Attrition Rate
+attrition = combined %>% filter(stage_completed == 1) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(attrition_rate = length(unique(agent))/1000)
+
+# Errors to criterion
+errors = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(error_to_criterion_agent = sum(choice == 0)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(error_to_criterion = mean(error_to_criterion_agent))
+
+# Trials to criterion
+trials = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(trial_to_criterion_agent = max(trial)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(trial_to_criterion = mean(trial_to_criterion_agent))
+
+
+# Plots
+# Attrition rate
+ggplot(attrition, aes(x = stage_name, y = attrition_rate, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f" = "red", "high_f" = "blue")) +
+  scale_y_continuous(n.breaks = 10, limits = c(0,1)) +
+  ylab("Percent Completing") +
+  xlab("Stage") +
+  ggtitle("Attrition Rate") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig3_attrition.png"), width = 4, height = 5.5)
+
+# Errors to criterion
+ggplot(errors, aes(x = stage_name, y = error_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f" = "red", "high_f" = "blue")) +
+  scale_y_continuous(n.breaks = 11, limits = c(0,16)) +
+  ylab("Errors to Criterion") +
+  xlab("Stage") +
+  ggtitle("Errors") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig3_errors.png"), width = 4, height = 5.5)
+  
+
+# Trials to criterion
+ggplot(trials, aes(x = stage_name, y = trial_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f" = "red", "high_f" = "blue")) +
+  scale_y_continuous(n.breaks = 7, limits = c(0,35)) +
+  ylab("Trials to Criterion") +
+  xlab("Stage") +
+  ggtitle("Trials") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig3_trials.png"), width = 4, height = 5.5)
+```
+
+### FIGURE 4 PLOTS ###
+```{r}
+# Define parameters
+low_f_moderate_p_params = list(
+  group = "low_f_moderate_p",
+  n_correct = 6,
+  f = 0.08,
+  r = 0.3,
+  p = 0.3,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+)
+  
+moderate_f_low_p_params = list(
+  group = "moderate_f_low_p",
+  n_correct = 6,
+  f = 0.3,
+  r = 0.3,
+  p = 0.08,
+  d = 3,
+  lambda = 0.05,
+  switch1 = 0.95,
+  switch2 = 0.95
+  
+)
+
+# Run simulation with the parameters specified above for n agents with the given seed
+low_f_moderate_p_df = run_simulation(low_f_moderate_p_params, 1000, seq(1,1000))
+moderate_f_low_p_df = run_simulation(moderate_f_low_p_params, 1000, seq(1,1000))
+# Combine data for plot of both groups
+combined = rbind(low_f_moderate_p_df, moderate_f_low_p_df)
+
+# Define stage names for plot
+combined$stage_name = ifelse(combined$stage == 1, "1: SD",
+                        ifelse(combined$stage == 2, "2: SDr",
+                        ifelse(combined$stage == 3, "3: C-D",
+                        ifelse(combined$stage == 4, "4: CD",
+                        ifelse(combined$stage == 5, "5: CDr",
+                        ifelse(combined$stage == 6, "6: ID",
+                        ifelse(combined$stage == 7, "7: IDr",
+                        ifelse(combined$stage == 8, "8: ED",
+                        ifelse(combined$stage == 9, "9: EDr", NA)))))))))
+
+# Measures
+# Attrition Rate
+attrition = combined %>% filter(stage_completed == 1) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(attrition_rate = length(unique(agent))/1000)
+
+# Errors to criterion
+errors = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(error_to_criterion_agent = sum(choice == 0)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(error_to_criterion = mean(error_to_criterion_agent))
+
+# Trials to criterion
+trials = combined %>% 
+  group_by(group, agent, stage, stage_name) %>%
+  summarise(trial_to_criterion_agent = max(trial)) %>% 
+  group_by(group, stage, stage_name) %>% 
+  summarise(trial_to_criterion = mean(trial_to_criterion_agent))
+
+
+# Plots
+# Attrition rate
+ggplot(attrition, aes(x = stage_name, y = attrition_rate, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f_moderate_p" = "red", "moderate_f_low_p" = "blue")) +
+  scale_y_continuous(n.breaks = 10, limits = c(0,1)) +
+  ylab("Percent Completing") +
+  xlab("Stage") +
+  ggtitle("Attrition Rate") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig4_attrition.png"), width = 4, height = 5.5)
+
+# Errors to criterion
+ggplot(errors, aes(x = stage_name, y = error_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f_moderate_p" = "red", "moderate_f_low_p" = "blue")) +
+  scale_y_continuous(n.breaks = 11, limits = c(0,15.3)) +
+  ylab("Errors to Criterion") +
+  xlab("Stage") +
+  ggtitle("Errors") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig4_errors.png"), width = 4, height = 5.5)
+  
+
+# Trials to criterion
+ggplot(trials, aes(x = stage_name, y = trial_to_criterion, color = group, group = group)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_color_manual(values = c("low_f_moderate_p" = "red", "moderate_f_low_p" = "blue")) +
+  scale_y_continuous(n.breaks = 7, limits = c(0,35)) +
+  ylab("Trials to Criterion") +
+  xlab("Stage") +
+  ggtitle("Trials") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+ggsave(paste0("simulation_figures/fig4_trials.png"), width = 4, height = 5.5)
+```
+

@@ -1,0 +1,11 @@
+*.rds
+output*/
+x_*/
+fitting_on_1050agents/
+yearsley_alpha_neg.stan
+yearsley_alpha_pos.stan
+yearsley_f.stan
+*.zip
+4-empirical/output/
+3-recovery/fitting/output/
+data/
