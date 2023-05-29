@@ -9,3 +9,4 @@ yearsley_f.stan
 4-empirical/output/
 3-recovery/fitting/output/
 data/
+*.csv

@@ -1,0 +1,317 @@
+# Parameter recovery Yearsley (Y-RL)
+
+# Load packages and functions
+```{r}
+# Load packages
+pacman::p_load(ggplot2, tidyverse, RColorBrewer, brms)
+options(dplyr.summarise.inform = FALSE)
+
+# Set to source file location 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../../utils/quality_check_functions.R")
+```
+
+# Load data
+```{r}
+# Reset and specify model
+fit_all = NULL
+sim_data = "yearsley"
+
+# Load data saved in csv
+fit_all <- read_csv(paste0("output/", sim_data, "/fit_all.csv"))
+
+# Load data anew
+param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+
+for (i in 1:nrow(param_combination[param_combination$n_agent == 1,])){ # loading for n_agent = 1
+ 
+  fit = as.data.frame(readRDS(paste0("../fitting/output/sim_", sim_data, "/model_yearsley/fit_", i, ".rds")))
+  fit$model = "yearsley"
+  
+  fit = fit[,1:15] # subset relevant columns
+  fit$id = i
+  fit$n_agent = param_combination$n_agent[i]
+  fit$true_alpha_pos_p =  param_combination$alpha_pos[i]
+  fit$true_alpha_neg_p = param_combination$alpha_neg[i]
+  fit$true_f_p = param_combination$f[i]
+  fit$true_alpha_pos_log = brms::logit_scaled(param_combination$alpha_pos[i])
+  fit$true_alpha_neg_log = brms::logit_scaled(param_combination$alpha_neg[i])
+  fit$true_f_log = brms::logit_scaled(param_combination$f[i])
+  
+  if (exists("fit_all")) {fit_all = rbind(fit_all, fit)} 
+  else {fit_all = fit}
+
+}
+
+# Save csv
+write_csv(fit_all, "output/yearsley/fit_all.csv")
+
+# Summarise data
+fit_summary = fit_all %>% 
+    group_by(id, true_f_p, true_alpha_pos_p, true_alpha_neg_p) %>% 
+    summarise(true_alpha_pos_log = mean(true_alpha_pos_log),
+              true_alpha_neg_log = mean(true_alpha_neg_log),
+              true_f_log = mean(true_f_log),
+              alpha_pos_posterior_log = mean(alpha_pos_posterior_log),
+              alpha_pos_posterior_p = mean(alpha_pos_posterior_p),
+              alpha_neg_posterior_log = mean(alpha_neg_posterior_log),
+              alpha_neg_posterior_p = mean(alpha_neg_posterior_p),
+              f_posterior_log = mean(f_posterior_log),
+              f_posterior_p = mean(f_posterior_p))
+
+# Round values
+fit_round <- data.frame(lapply(fit_summary, function(x) if(is.numeric(x)) round(x, 2) else x))
+```
+
+
+### Visualisations
+To change between plots on the probability scale and the log-odds scale when relevant, change the subscript of the given variable between _p and _log.
+
+## Overall plots for each parameter in the model
+```{r}
+# Alpha_r
+recovery_overall(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_alpha_r.png"), width = 4.2, height = 5)
+# Alpha_p
+recovery_overall(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_alpha_p.png"), width = 4.2, height = 5)
+# Phi
+recovery_overall(fit_round, "true_f_p", "f_posterior_p", "Phi", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_phi.png"), width = 4.2, height = 5)
+```
+
+## Interactions
+
+# Recovering alpha_r
+```{r}
+# Over alpha_p
+recovery_over_var_3(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "true_alpha_neg_p", "Alpha_p", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_r_alpha_p.png"), width = 4.2, height = 5)
+# Over phi
+recovery_over_var_3(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "true_f_p", "Phi", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_r_phi.png"), width = 4.2, height = 5)
+```
+
+# Recovering alpha_p
+```{r}
+# Over alpha_r
+recovery_over_var_3(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "true_alpha_pos_p", "Alpha_r", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_p_alpha_r.png"), width = 4.2, height = 5)
+# Over phi
+recovery_over_var_3(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "true_f_p", "Phi", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_p_phi.png"), width = 4.2, height = 5)
+```
+
+# Recovering phi
+```{r}
+# Over alpha_r
+recovery_over_var_3(fit_round, "true_f_p", "f_posterior_p", "true_alpha_pos_p", "Alpha_r", "Phi", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/phi_alpha_r.png"), width = 4.2, height = 5)
+# Over alpha_p
+recovery_over_var_3(fit_round, "true_f_p", "f_posterior_p", "true_alpha_neg_p", "Alpha_p", "Phi", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/phi_alpha_p.png"), width = 4.2, height = 5)
+```
+
+
+### Correlations
+Allows us to get the correlations as part of the "residual correlations"
+
+## Overall correlations
+```{r}
+# Formulas
+f_alpha_pos <- bf(mvbind(true_alpha_pos_p, alpha_pos_posterior_p) ~ 1) + set_rescor(TRUE)
+f_alpha_neg <- bf(mvbind(true_alpha_neg_p, alpha_neg_posterior_p) ~ 1) + set_rescor(TRUE)
+f_f <- bf(mvbind(true_f_p, f_posterior_p) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_pos_cor <- brm(
+  formula = f_alpha_pos,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+alpha_neg_cor <- brm(
+  formula = f_alpha_neg,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+f_cor <- brm(
+  formula = f_f,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Summary
+summary(alpha_pos_cor)
+summary(alpha_neg_cor)
+summary(f_cor)
+
+# Get parameter/variable names
+variables(alpha_pos_cor)
+variables(alpha_neg_cor)
+variables(f_cor)
+
+# Test hypotheses
+hypothesis(alpha_pos_cor, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_neg_cor, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(f_cor, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+```
+
+## Interactions
+
+# Alpha_r
+```{r}
+# Update data for interactions
+# Over alpha_p
+alpha_r_alpha_p_01 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.1, ], seed = 1)
+alpha_r_alpha_p_03 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.3, ], seed = 1)
+alpha_r_alpha_p_05 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.5, ], seed = 1)
+alpha_r_alpha_p_07 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.7, ], seed = 1)
+alpha_r_alpha_p_09 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.9, ], seed = 1)
+# Over phi
+alpha_r_phi_01 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_f_p == 0.1, ], seed = 1)
+alpha_r_phi_03 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_f_p == 0.3, ], seed = 1)
+alpha_r_phi_05 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_f_p == 0.5, ], seed = 1)
+alpha_r_phi_07 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_f_p == 0.7, ], seed = 1)
+alpha_r_phi_09 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_f_p == 0.9, ], seed = 1)
+
+
+# Summary
+# Over alpha_p
+summary(alpha_r_alpha_p_01)
+summary(alpha_r_alpha_p_03)
+summary(alpha_r_alpha_p_05)
+summary(alpha_r_alpha_p_07)
+summary(alpha_r_alpha_p_09)
+# Over phi
+summary(alpha_r_phi_01)
+summary(alpha_r_phi_03)
+summary(alpha_r_phi_05)
+summary(alpha_r_phi_07)
+summary(alpha_r_phi_09)
+
+
+# Test hypotheses
+# Over alpha_p
+hypothesis(alpha_r_alpha_p_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_03, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_07, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_09, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+
+# Over phi
+hypothesis(alpha_r_phi_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_phi_03, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_phi_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_phi_07, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_phi_09, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+```
+
+# Alpha_p
+```{r}
+# Update data for interactions
+# Over alpha_r
+alpha_p_alpha_r_01 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.1, ], seed = 1)
+alpha_p_alpha_r_03 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.3, ], seed = 1)
+alpha_p_alpha_r_05 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.5, ], seed = 1)
+alpha_p_alpha_r_07 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.7, ], seed = 1)
+alpha_p_alpha_r_09 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.9, ], seed = 1)
+# Over phi
+alpha_p_phi_01 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_f_p == 0.1, ], seed = 1)
+alpha_p_phi_03 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_f_p == 0.3, ], seed = 1)
+alpha_p_phi_05 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_f_p == 0.5, ], seed = 1)
+alpha_p_phi_07 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_f_p == 0.7, ], seed = 1)
+alpha_p_phi_09 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_f_p == 0.9, ], seed = 1)
+
+
+# Summary
+# Over alpha_r
+summary(alpha_p_alpha_r_01)
+summary(alpha_p_alpha_r_03)
+summary(alpha_p_alpha_r_05)
+summary(alpha_p_alpha_r_07)
+summary(alpha_p_alpha_r_09)
+# Over phi
+summary(alpha_p_phi_01)
+summary(alpha_p_phi_03)
+summary(alpha_p_phi_05)
+summary(alpha_p_phi_07)
+summary(alpha_p_phi_09)
+
+
+# Test hypotheses
+# Over alpha_r
+hypothesis(alpha_p_alpha_r_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_03, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_07, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_09, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+
+# Over phi
+hypothesis(alpha_p_phi_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_phi_03, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_phi_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_phi_07, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_phi_09, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+```
+
+# Phi
+```{r}
+# Update data for interactions
+# Over alpha_r
+phi_alpha_r_01 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.1, ], seed = 1)
+phi_alpha_r_03 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.3, ], seed = 1)
+phi_alpha_r_05 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.5, ], seed = 1)
+phi_alpha_r_07 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.7, ], seed = 1)
+phi_alpha_r_09 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.9, ], seed = 1)
+# Over alpha_p
+phi_alpha_p_01 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.1, ], seed = 1)
+phi_alpha_p_03 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.3, ], seed = 1)
+phi_alpha_p_05 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.5, ], seed = 1)
+phi_alpha_p_07 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.7, ], seed = 1)
+phi_alpha_p_09 <- update(f_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.9, ], seed = 1)
+
+
+# Summary
+# Over alpha_r
+summary(phi_alpha_r_01)
+summary(phi_alpha_r_03)
+summary(phi_alpha_r_05)
+summary(phi_alpha_r_07)
+summary(phi_alpha_r_09)
+# Over alpha_p
+summary(phi_alpha_p_01)
+summary(phi_alpha_p_03)
+summary(phi_alpha_p_05)
+summary(phi_alpha_p_07)
+summary(phi_alpha_p_09)
+
+
+# Test hypotheses
+# Over alpha_r
+hypothesis(phi_alpha_r_01, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_r_03, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_r_05, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_r_07, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_r_09, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+
+# Over alpha_p
+hypothesis(phi_alpha_p_01, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_p_03, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_p_05, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_p_07, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+hypothesis(phi_alpha_p_09, "rescor__truefp__fposteriorp > 0.5", class = NULL)
+```

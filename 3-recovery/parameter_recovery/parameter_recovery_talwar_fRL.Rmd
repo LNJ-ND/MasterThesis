@@ -1,0 +1,195 @@
+# Parameter recovery Talwar fRL (T-fRL)
+
+# Load packages and functions
+```{r}
+# Load packages
+pacman::p_load(ggplot2, tidyverse, RColorBrewer, brms)
+options(dplyr.summarise.inform = FALSE)
+
+# Set to source file location 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../../utils/quality_check_functions.R")
+```
+
+# Load data
+```{r}
+# Reset and specify model
+fit_all = NULL
+sim_data = "talwar_fRL"
+
+# Load data saved in csv
+fit_all <- read_csv(paste0("output/", sim_data, "/fit_all.csv"))
+
+# Load data anew
+param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+
+for (i in 1:nrow(param_combination[param_combination$n_agent == 1,])){ # loading for n_agent = 1
+ 
+  fit = as.data.frame(readRDS(paste0("../fitting/output/sim_", sim_data, "/model_talwar_fRL/fit_", i, ".rds")))
+  fit$model = "talwar_fRL"
+  
+  fit = fit[,1:8] # subset relevant columns
+  fit$id = i
+  fit$n_agent = param_combination$n_agent[i]
+  fit$true_alpha_p = param_combination$alpha[i]
+  fit$true_alpha_log = brms::logit_scaled(param_combination$alpha[i])
+  fit$true_beta = param_combination$beta[i]
+  
+  if (exists("fit_all")) {fit_all = rbind(fit_all, fit)} 
+  else {fit_all = fit}
+}
+
+# Save csv
+write_csv(fit_all, "output/talwar_fRL/fit_all.csv")
+
+# Summarise data
+fit_summary = fit_all %>% 
+    group_by(id, true_alpha_p, true_beta) %>% 
+    summarise(true_alpha_log = mean(true_alpha_log),
+              alpha_posterior_log = mean(alpha_posterior_log),
+              alpha_posterior_p = mean(alpha_posterior_p),
+              beta_posterior = mean(beta_posterior))
+              
+
+# Round values
+fit_round <- data.frame(lapply(fit_summary, function(x) if(is.numeric(x)) round(x, 3) else x))
+```
+
+
+### Visualisations
+To change between plots on the probability scale and the log-odds scale when relevant, change the subscript of the given variable between _p and _log.
+
+## Overall plots for each parameter in the model
+```{r}
+# Alpha
+recovery_overall(fit_round, "true_alpha_p", "alpha_posterior_p", "Alpha", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_alpha.png"), width = 4.2, height = 5)
+# Beta
+recovery_overall(fit_round, "true_beta", "beta_posterior", "Beta", y_labs = c(0.1, 0.5, 1, 2, 3, 5, 10))
+ggsave(paste0("output/", sim_data, "/overall_beta.png"), width = 4.2, height = 5)
+```
+
+
+## Interactions
+
+# Recovering alpha
+```{r}
+# Over beta
+recovery_over_var_3(fit_round, "true_alpha_p", "alpha_posterior_p", "true_beta", "Beta", "Alpha", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_beta.png"), width = 4.2, height = 5)
+```
+
+# Recovering beta
+```{r}
+# Over alpha
+recovery_over_var_3(fit_round, "true_beta", "beta_posterior", "true_alpha_p", "Alpha", "Beta", y_labs = c(0.1, 0.5, 1, 2, 3, 5, 10))
+ggsave(paste0("output/", sim_data, "/beta_alpha.png"), width = 4.2, height = 5)
+```
+
+
+### Correlations
+Allows us to get the correlations as part of the "residual correlations"
+
+## Overall correlations
+```{r}
+# Formulas
+f_alpha <- bf(mvbind(true_alpha_p, alpha_posterior_p) ~ 1) + set_rescor(TRUE)
+f_beta <- bf(mvbind(true_beta, beta_posterior) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_cor <- brm(
+  formula = f_alpha,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+beta_cor <- brm(
+  formula = f_beta,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Summary
+summary(alpha_cor)
+summary(beta_cor)
+
+# Get parameter/variable names
+variables(alpha_cor)
+variables(beta_cor)
+
+# Test hypotheses
+hypothesis(alpha_cor, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(beta_cor, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+```
+
+## Interactions
+
+# Alpha
+```{r}
+# Update data for interactions
+# Over beta
+alpha_beta_01 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_beta_05 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_beta_1 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 1, ], seed = 1)
+alpha_beta_2 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 2, ], seed = 1)
+alpha_beta_3 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 3, ], seed = 1)
+alpha_beta_5 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 5, ], seed = 1)
+alpha_beta_10 <- update(alpha_cor, newdata = fit_summary[fit_summary$true_beta == 10, ], seed = 1)
+
+# Summary
+# Over beta
+summary(alpha_beta_01)
+summary(alpha_beta_05)
+summary(alpha_beta_1)
+summary(alpha_beta_2)
+summary(alpha_beta_3)
+summary(alpha_beta_5)
+summary(alpha_beta_10)
+
+
+# Test hypotheses
+# Over beta
+hypothesis(alpha_beta_01, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_05, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_1, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_2, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_3, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_5, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+hypothesis(alpha_beta_10, "rescor__truealphap__alphaposteriorp > 0.5", class = NULL)
+```
+
+# Beta
+```{r}
+# Update data for interactions
+# Over alpha
+beta_alpha_01 <- update(beta_cor, newdata = fit_summary[fit_summary$true_alpha_p == 0.1, ], seed = 1)
+beta_alpha_03 <- update(beta_cor, newdata = fit_summary[fit_summary$true_alpha_p == 0.3, ], seed = 1)
+beta_alpha_05 <- update(beta_cor, newdata = fit_summary[fit_summary$true_alpha_p == 0.5, ], seed = 1)
+beta_alpha_07 <- update(beta_cor, newdata = fit_summary[fit_summary$true_alpha_p == 0.7, ], seed = 1)
+beta_alpha_09 <- update(beta_cor, newdata = fit_summary[fit_summary$true_alpha_p == 0.9, ], seed = 1)
+
+# Summary
+# Over alpha
+summary(beta_alpha_01)
+summary(beta_alpha_03)
+summary(beta_alpha_05)
+summary(beta_alpha_07)
+summary(beta_alpha_09)
+
+
+# Test hypotheses
+# Over alpha
+hypothesis(beta_alpha_01, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+hypothesis(beta_alpha_03, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+hypothesis(beta_alpha_05, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+hypothesis(beta_alpha_07, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+hypothesis(beta_alpha_09, "rescor__truebeta__betaposterior > 0.5", class = NULL)
+```

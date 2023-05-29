@@ -1,0 +1,216 @@
+# Model Recovery
+
+This is the script used to perform model recovery.
+
+# Packages
+```{r}
+pacman::p_load(tidyverse, ggplot2, brms, cvms, ggnewscale, caret)
+```
+
+# Function to perform model comparison for each model that was fitted
+```{r}
+
+get_best_models = function(sim_data) {
+
+  # Get parameter combinations, and filter to only have the ones with 1 agent
+  param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+  param_combination = filter(param_combination, n_agent == 1)
+  
+  # Add column for sim data for confusion matrix
+  param_combination$sim_data = sim_data
+  
+  # For each parameter combination (i.e. each dataset)
+  for (i in 1:nrow(param_combination)) {
+    
+      # Load loo's
+      yearsley = readRDS(paste0("../fitting/output/sim_", sim_data, "/model_yearsley/loo_", i, ".rds"))
+      talwar_fRL = readRDS(paste0("../fitting/output/sim_", sim_data, "/model_talwar_fRL/loo_", i, ".rds"))
+      talwar_cafRL = readRDS(paste0("../fitting/output/sim_", sim_data, "/model_talwar_cafRL_fixedbeta/loo_", i, ".rds"))
+      ln_fRL = readRDS(paste0("../fitting/output/sim_", sim_data, "/model_ln_fRL/loo_", i, ".rds"))
+      ln_cafRL = readRDS(paste0("../fitting/output/sim_", sim_data, "/model_ln_cafRL_fixedbeta/loo_", i, ".rds"))
+      
+      # Loo compare
+      compare = loo_compare(list(yearsley=yearsley, talwar_fRL=talwar_fRL, talwar_cafRL=talwar_cafRL, ln_fRL=ln_fRL, ln_cafRL=ln_cafRL))
+    
+      # Get the best model based on elpd
+      best_compare = rownames(compare)[1]
+      
+      # Loo stacking weights
+      weights = loo_model_weights(list(yearsley=yearsley, talwar_fRL=talwar_fRL, talwar_cafRL=talwar_cafRL, ln_fRL=ln_fRL, ln_cafRL=ln_cafRL))
+      
+      # Get the best model based on stacking weigths
+      best_weights = names(which(weights == max(weights)))
+      
+      # Add to data frame
+      # ELPD
+      param_combination$best_compare[i] = best_compare
+      param_combination$yearsley_elpd[i] = compare["yearsley","elpd_diff"]
+      param_combination$talwar_fRL_elpd[i] = compare["talwar_fRL","elpd_diff"]
+      param_combination$talwar_cafRL_elpd[i] = compare["talwar_cafRL","elpd_diff"]
+      param_combination$ln_fRL_elpd[i] = compare["ln_fRL","elpd_diff"]
+      param_combination$ln_cafRL_elpd[i] = compare["ln_cafRL","elpd_diff"]
+      
+      # Stacking weights
+      param_combination$best_weights[i] = best_weights
+      param_combination$yearsley_weights[i] = weights["yearsley"]
+      param_combination$talwar_fRL_weights[i] = weights["talwar_fRL"]
+      param_combination$talwar_cafRL_weights[i] = weights["talwar_cafRL"]
+      param_combination$ln_fRL_weights[i] = weights["ln_fRL"]
+      param_combination$ln_cafRL_weights[i] = weights["ln_cafRL"]
+  
+  }
+  
+  # Return the dataframe with information from model comparison
+  return(param_combination)
+}
+
+```
+
+# Get the best models for each model used for simulation of data
+```{r}
+# Get all outputs
+out_yearsley = get_best_models("yearsley")
+out_talwar_fRL = get_best_models("talwar_fRL")
+out_talwar_cafRL = get_best_models("talwar_cafRL")
+out_ln_fRL = get_best_models("ln_fRL")
+out_ln_cafRL = get_best_models("ln_cafRL")
+
+# Bind together the true and predicted/inferred models 
+true_pred = rbind(subset(out_yearsley, select = c("sim_data", "best_compare", "best_weights")), 
+                  subset(out_talwar_fRL, select = c("sim_data", "best_compare", "best_weights")),
+                  subset(out_talwar_cafRL, select = c("sim_data", "best_compare", "best_weights")),
+                  subset(out_ln_fRL, select = c("sim_data", "best_compare", "best_weights")),
+                  subset(out_ln_cafRL, select = c("sim_data", "best_compare", "best_weights")))
+
+# Rename for plots
+true_pred[true_pred == "yearsley"] <- "Y-RL"
+true_pred[true_pred == "talwar_fRL"] <- "T-fRL"
+true_pred[true_pred == "talwar_cafRL"] <- "T-cafRL"
+true_pred[true_pred == "ln_fRL"] <- "LN-fRL"
+true_pred[true_pred == "ln_cafRL"] <- "LN-cafRL"
+```
+
+# Accuracy with standard error plots
+```{r}
+# Based on https://stats.stackexchange.com/questions/29641/standard-error-for-the-mean-of-a-sample-of-binomial-random-variables
+
+# Calcualte standard errors
+sum_se = true_pred %>% 
+  group_by(sim_data) %>% 
+  summarise(n_correct = sum(best_weights == sim_data), n_false = sum(best_weights != sim_data)) %>% 
+  mutate(p = n_correct/875, q = 1-p, se_1 = sqrt(p*q), se_875 = sqrt(p*q/875),
+         lower_1 = ifelse(p - se_1 < 0, 0, p - se_1),
+         upper_1 = ifelse(p + se_1 > 1, 1, p + se_1),
+         lower_875 = ifelse(p - se_875 < 0, 0, p - se_875),
+         upper_875 = ifelse(p + se_875 > 1, 1, p + se_875))
+
+# Make the levels into a factor
+sum_se$sim_data <- factor(sum_se$sim_data, levels = c("Y-RL", "T-fRL", "T-cafRL", "LN-fRL", "LN-cafRL"))
+
+# Plot for n = 1 
+ggplot(sum_se, aes(x=sim_data, y=p*100)) + 
+    geom_errorbar(aes(ymin=lower_1*100, ymax=upper_1*100), width=.1) +
+    geom_line() +
+    geom_point() +
+    geom_hline(yintercept=20, color="red") +
+    labs(x="Model", y="Accuracy (%)", title = "Accuracy of Model Comparison (1)") +
+    theme_bw()
+
+#ggsave("accuracy_se_1.png", width=4, height=4)
+
+# Plot for n = 875
+ggplot(sum_se, aes(x=sim_data, y=p*100)) + 
+    geom_errorbar(aes(ymin=lower_875*100, ymax=upper_875*100), width=.1) +
+    geom_line() +
+    geom_point() +
+    geom_hline(yintercept=20, color="red") +
+    labs(x="Model", y="Accuracy (%)", title = "Accuracy of Model Comparison (875)") +
+    theme_bw() +
+    ylim(0,100)
+
+#ggsave("accuracy_se_875.png", width=4, height=4)
+
+```
+
+# Get classification performance metrics
+```{r}
+
+# Confusion matrix based on best stacking weights
+cm = caret::confusionMatrix(data = factor(true_pred$best_weights, levels = c("Y-RL", "T-fRL", "T-cafRL", "LN-fRL", "LN-cafRL")),
+                       reference = factor(true_pred$sim_data, levels = c("Y-RL", "T-fRL", "T-cafRL", "LN-fRL", "LN-cafRL")),
+                       dnn = c("Inferred Model", "True Model"))
+
+# Print statistics
+cm
+```
+
+# Create confusion matrices 
+```{r}
+# Based on average stacking weights
+ev = cvms::evaluate(data=true_pred, target_col="sim_data", prediction_cols="best_weights", type="multinomial")
+cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_normalized = F, add_col_percentages = T,
+                            palette="Blues",
+                            font_counts = font(size = 2.8, fontface ="bold"),
+                            font_col_percentages = font(size = 2.5, vjust = -1.3, fontface = "plain"),
+                            sums_settings = sum_tile_settings(
+                                  palette = "Oranges",
+                                  tc_tile_border_color = "black")) +
+  ggplot2::labs(x = "True Model", y = "Inferred Model")
+
+#ggsave("cm_best_weights.png", width = 5, height = 4)
+
+# Based on elpd 
+ev = cvms::evaluate(data=true_pred, target_col="sim_data", prediction_cols="best_compare", type="multinomial")
+cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_normalized = F, add_col_percentages = T,
+                            palette="Blues",
+                            font_counts = font(size = 2.8, fontface ="bold"),
+                            font_col_percentages = font(size = 2.5, vjust = -1.3, fontface = "plain"),
+                            sums_settings = sum_tile_settings(
+                                  palette = "Oranges",
+                                  tc_tile_border_color = "black")) +
+  ggplot2::labs(x = "True Model", y = "Inferred Model")
+
+#ggsave("cm_best_compare.png", width = 5, height = 4)
+```
+
+# Confusion matrix of average stacking weights
+```{r}
+
+# Get means
+yearsley_means = colMeans(out_yearsley[,c(14:18)])
+talwar_fRL_means = colMeans(out_talwar_fRL[,c(13:17)])
+talwar_cafRL_means = colMeans(out_talwar_cafRL[,c(14:18)])
+ln_fRL_means = colMeans(out_ln_fRL[,c(14:18)])
+ln_cafRL_means = colMeans(out_ln_cafRL[,c(15:19)])
+
+# Transpose data
+all_avg_weights = data.frame(t(rbind(yearsley_means, talwar_fRL_means, talwar_cafRL_means, ln_fRL_means, ln_cafRL_means)))
+all_avg_weights <- cbind("fitted_model" = rownames(all_avg_weights), all_avg_weights)
+rownames(all_avg_weights) <- 1:nrow(all_avg_weights)
+all_avg_weights = gather(all_avg_weights, true_model, avg_weight, yearsley_means:ln_cafRL_means, factor_key=TRUE)
+
+# Replace names
+all_avg_weights$fitted_model = str_replace_all(all_avg_weights$fitted_model, "_weights", "")
+all_avg_weights$true_model = str_replace_all(all_avg_weights$true_model, "_means", "")
+all_avg_weights[all_avg_weights == "yearsley"] <- "Y-RL"
+all_avg_weights[all_avg_weights == "talwar_fRL"] <- "T-fRL"
+all_avg_weights[all_avg_weights == "talwar_cafRL"] <- "T-cafRL"
+all_avg_weights[all_avg_weights == "ln_fRL"] <- "LN-fRL"
+all_avg_weights[all_avg_weights == "ln_cafRL"] <- "LN-cafRL"
+
+# Round values
+all_avg_weights$avg_weight = round(all_avg_weights$avg_weight,3)
+
+# Generate plot
+ggplot(data = all_avg_weights, aes(x = true_model , y = fitted_model, fill = avg_weight)) +
+  geom_tile() +
+  geom_text(aes(label = avg_weight), size = 3) +
+  labs(x= "True Model", y = "Fitted Model", title = "Average Stacking Weights") +
+  guides(fill="none") +
+  scale_fill_distiller("Blues") + 
+  scale_x_discrete(position = "top", limits=rev) +
+  theme_minimal()
+
+#ggsave("cm_avg_weights.png", width=4, height=4)
+
+```

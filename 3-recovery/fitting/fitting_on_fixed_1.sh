@@ -1,0 +1,2 @@
+Rscript fitting_on_ln_cafRL_fixed_1.R ln_cafRL_fixedbeta &> output/sim_ln_cafRL_model_ln_cafRL_fixed_1.log &
+Rscript fitting_on_talwar_cafRL_fixed_1.R talwar_cafRL_fixedbeta &> output/sim_talwar_cafRL_model_talwar_cafRL_fixed_1.log &

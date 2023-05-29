@@ -1,0 +1,455 @@
+# Parameter recovery ln cafRL (LN-cafRL)
+
+# Load packages and functions
+```{r}
+# Load packages
+pacman::p_load(ggplot2, tidyverse, RColorBrewer, brms)
+options(dplyr.summarise.inform = FALSE)
+
+# Set to source file location 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../../utils/quality_check_functions.R")
+```
+
+# Load data
+```{r}
+# Reset and specify model
+fit_all = NULL
+sim_data = "ln_cafRL"
+
+# Load data saved in csv
+fit_all <- read_csv(paste0("output/", sim_data, "/fit_all.csv"))
+
+# Load data anew
+param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+
+for (i in 1:nrow(param_combination[param_combination$n_agent == 1,])){ # loading for n_agent = 1
+  
+  fit = as.data.frame(readRDS(paste0("../fitting/output/sim_", sim_data, "/model_ln_cafRL_fixedbeta/fit_", i, ".rds")))
+  
+  fit = fit[,1:15] # subset relevant columns
+  fit$id = i
+  fit$n_agent = param_combination$n_agent[i]
+  fit$true_alpha_pos_p = param_combination$alpha_pos[i]
+  fit$true_alpha_pos_log = brms::logit_scaled(param_combination$alpha_pos[i])
+  fit$true_alpha_neg_p = param_combination$alpha_neg[i]
+  fit$true_alpha_neg_log = brms::logit_scaled(param_combination$alpha_neg[i])
+  fit$true_beta = param_combination$beta[i]
+  fit$true_theta0_p = brms::inv_logit_scaled(param_combination$theta0[i])
+  fit$true_theta0_log = param_combination$theta0[i]
+  
+  if (exists("fit_all")) {fit_all = rbind(fit_all, fit)} 
+  else {fit_all = fit}
+}
+
+# Save csv
+write_csv(fit_all, "output/ln_cafRL/fit_all.csv")
+
+# Summarise data
+fit_summary = fit_all %>% 
+    group_by(id, true_alpha_pos_p, true_alpha_neg_p, true_beta, true_theta0_p) %>% 
+    summarise(true_alpha_pos_log = mean(true_alpha_pos_log),
+              true_alpha_neg_log = mean(true_alpha_neg_log),
+              true_theta0_log = mean(true_theta0_log),
+              alpha_pos_posterior_log = mean(alpha_pos_posterior_log),
+              alpha_pos_posterior_p = mean(alpha_pos_posterior_p),
+              alpha_neg_posterior_log = mean(alpha_neg_posterior_log),
+              alpha_neg_posterior_p = mean(alpha_neg_posterior_p),
+              theta0_posterior_log = mean(theta0_posterior_log),
+              theta0_posterior_p = mean(theta0_posterior_p))
+              
+
+# Round values
+fit_round <- data.frame(lapply(fit_summary, function(x) if(is.numeric(x)) round(x, 2) else x))
+```
+
+
+### Visualisations
+To change between plots on the probability scale and the log-odds scale when relevant, change the subscript of the given variable between _p and _log.
+
+## Overall plots for each parameter in the model
+```{r}
+# Alpha_r
+recovery_overall(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_alpha_r.png"), width = 4.2, height = 5)
+# Alpha_p
+recovery_overall(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/overall_alpha_p.png"), width = 4.2, height = 5)
+# Theta_0
+recovery_overall(fit_round, "true_theta0_log", "theta0_posterior_log", "Theta_0", y_labs = c(-2.2, -0.85, 0, 0.85, 2.2))
+ggsave(paste0("output/", sim_data, "/overall_theta0.png"), width = 4.2, height = 5)
+```
+
+## Interactions
+
+# Recovering alpha_r
+```{r}
+# Over alpha_p
+recovery_over_var_3(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "true_alpha_neg_p", "Alpha_p", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_r_alpha_p.png"), width = 4.2, height = 5)
+# Over beta
+recovery_over_var_3(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "true_beta", "Beta", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_r_beta.png"), width = 4.2, height = 5)
+# Over theta0
+recovery_over_var_3(fit_round, "true_alpha_pos_p", "alpha_pos_posterior_p", "true_theta0_log", "Theta_0", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_r_theta_0.png"), width = 4.2, height = 5)
+```
+
+# Recovering alpha_p
+```{r}
+# Over alpha_r
+recovery_over_var_3(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "true_alpha_pos_p", "Alpha_r", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_p_alpha_r.png"), width = 4.2, height = 5)
+# Over beta
+recovery_over_var_3(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "true_beta", "Beta", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_p_beta.png"), width = 4.2, height = 5)
+# Over theta0
+recovery_over_var_3(fit_round, "true_alpha_neg_p", "alpha_neg_posterior_p", "true_theta0_log", "Theta_0", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/alpha_p_theta_0.png"), width = 4.2, height = 5)
+```
+
+# Recovering theta_0
+```{r}
+# Over alpha_r
+recovery_over_var_3(fit_round, "true_theta0_log", "theta0_posterior_log", "true_alpha_pos_p", "Alpha_r", "Theta_0", y_labs = c(-2.2, -0.85, 0, 0.85, 2.2))
+ggsave(paste0("output/", sim_data, "/theta_0_alpha_r.png"), width = 4.25, height = 5)
+# Over alpha_p
+recovery_over_var_3(fit_round, "true_theta0_log", "theta0_posterior_log", "true_alpha_neg_p", "Alpha_p", "Theta_0", y_labs = c(-2.2, -0.85, 0, 0.85, 2.2))
+ggsave(paste0("output/", sim_data, "/theta_0_alpha_p.png"), width = 4.25, height = 5)
+# Over beta
+recovery_over_var_3(fit_round, "true_theta0_log", "theta0_posterior_log", "true_beta", "Beta", "Theta_0", y_labs = c(-2.2, -0.85, 0, 0.85, 2.2))
+ggsave(paste0("output/", sim_data, "/theta_0_beta.png"), width = 4.25, height = 5)
+```
+
+
+### Correlations
+Allows us to get the correlations as part of the "residual correlations"
+
+## Overall correlations
+```{r}
+# Formulas
+f_alpha_pos <- bf(mvbind(true_alpha_pos_p, alpha_pos_posterior_p) ~ 1) + set_rescor(TRUE)
+f_alpha_neg <- bf(mvbind(true_alpha_neg_p, alpha_neg_posterior_p) ~ 1) + set_rescor(TRUE)
+f_theta_0 <- bf(mvbind(true_theta0_log, theta0_posterior_log) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_pos_cor <- brm(
+  formula = f_alpha_pos,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+alpha_neg_cor <- brm(
+  formula = f_alpha_neg,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+theta_0_cor <- brm(
+  formula = f_theta_0,
+  data = fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Summary
+summary(alpha_pos_cor)
+summary(alpha_neg_cor)
+summary(theta_0_cor)
+
+# Get parameter/variable names
+variables(alpha_pos_cor)
+variables(alpha_neg_cor)
+variables(theta_0_cor)
+
+# Test hypotheses
+hypothesis(alpha_pos_cor, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_neg_cor, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(theta_0_cor, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+```
+
+## Interactions
+
+# Alpha_r
+```{r}
+# Update data for interactions
+# Over alpha_p
+alpha_r_alpha_p_01 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.1, ], seed = 1)
+alpha_r_alpha_p_03 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.3, ], seed = 1)
+alpha_r_alpha_p_05 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.5, ], seed = 1)
+alpha_r_alpha_p_07 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.7, ], seed = 1)
+alpha_r_alpha_p_09 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.9, ], seed = 1)
+# Over beta
+alpha_r_beta_01 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_r_beta_05 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_r_beta_1 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 1, ], seed = 1)
+alpha_r_beta_2 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 2, ], seed = 1)
+alpha_r_beta_3 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 3, ], seed = 1)
+alpha_r_beta_5 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 5, ], seed = 1)
+alpha_r_beta_10 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_beta == 10, ], seed = 1)
+# Over theta_0
+alpha_r_theta_0_01 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_theta0_log < -2, ], seed = 1)
+alpha_r_theta_0_03 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_theta0_log < -0.5 & fit_summary$true_theta0_log > -1, ], seed = 1)
+alpha_r_theta_0_05 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_theta0_log == 0, ], seed = 1)
+alpha_r_theta_0_07 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_theta0_log > 0.5 & fit_summary$true_theta0_log < 1, ], seed = 1)
+alpha_r_theta_0_09 <- update(alpha_pos_cor, newdata = fit_summary[fit_summary$true_theta0_log > 2, ], seed = 1)
+
+
+# Summary
+# Over alpha_p
+summary(alpha_r_alpha_p_01)
+summary(alpha_r_alpha_p_03)
+summary(alpha_r_alpha_p_05)
+summary(alpha_r_alpha_p_07)
+summary(alpha_r_alpha_p_09)
+# Over beta
+summary(alpha_r_beta_01)
+summary(alpha_r_beta_05)
+summary(alpha_r_beta_1)
+summary(alpha_r_beta_2)
+summary(alpha_r_beta_3)
+summary(alpha_r_beta_5)
+summary(alpha_r_beta_10)
+# Over theta_0
+summary(alpha_r_theta_0_01)
+summary(alpha_r_theta_0_03)
+summary(alpha_r_theta_0_05)
+summary(alpha_r_theta_0_07)
+summary(alpha_r_theta_0_09)
+
+
+# Test hypotheses
+# Over alpha_p
+hypothesis(alpha_r_alpha_p_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_03, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_07, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_alpha_p_09, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+# Over beta
+hypothesis(alpha_r_beta_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_1, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_2, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_3, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_5, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_beta_10, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+# Over theta_0
+hypothesis(alpha_r_theta_0_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_theta_0_03, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_theta_0_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_theta_0_07, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_r_theta_0_09, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+```
+
+# Alpha_p
+```{r}
+# Update data for interactions
+# Over alpha_r
+alpha_p_alpha_r_01 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.1, ], seed = 1)
+alpha_p_alpha_r_03 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.3, ], seed = 1)
+alpha_p_alpha_r_05 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.5, ], seed = 1)
+alpha_p_alpha_r_07 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.7, ], seed = 1)
+alpha_p_alpha_r_09 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.9, ], seed = 1)
+# Over beta
+alpha_p_beta_01 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_p_beta_05 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_p_beta_1 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 1, ], seed = 1)
+alpha_p_beta_2 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 2, ], seed = 1)
+alpha_p_beta_3 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 3, ], seed = 1)
+alpha_p_beta_5 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 5, ], seed = 1)
+alpha_p_beta_10 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_beta == 10, ], seed = 1)
+# Over theta_0
+alpha_p_theta_0_01 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_theta0_log < -2, ], seed = 1)
+alpha_p_theta_0_03 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_theta0_log < -0.5 & fit_summary$true_theta0_log > -1, ], seed = 1)
+alpha_p_theta_0_05 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_theta0_log == 0, ], seed = 1)
+alpha_p_theta_0_07 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_theta0_log > 0.5 & fit_summary$true_theta0_log < 1, ], seed = 1)
+alpha_p_theta_0_09 <- update(alpha_neg_cor, newdata = fit_summary[fit_summary$true_theta0_log > 2, ], seed = 1)
+
+
+# Summary
+# Over alpha_r
+summary(alpha_p_alpha_r_01)
+summary(alpha_p_alpha_r_03)
+summary(alpha_p_alpha_r_05)
+summary(alpha_p_alpha_r_07)
+summary(alpha_p_alpha_r_09)
+# Over beta
+summary(alpha_p_beta_01)
+summary(alpha_p_beta_05)
+summary(alpha_p_beta_1)
+summary(alpha_p_beta_2)
+summary(alpha_p_beta_3)
+summary(alpha_p_beta_5)
+summary(alpha_p_beta_10)
+# Over theta_0
+summary(alpha_p_theta_0_01)
+summary(alpha_p_theta_0_03)
+summary(alpha_p_theta_0_05)
+summary(alpha_p_theta_0_07)
+summary(alpha_p_theta_0_09)
+
+
+# Test hypotheses
+# Over alpha_r
+hypothesis(alpha_p_alpha_r_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_03, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_07, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_alpha_r_09, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+# Over beta
+hypothesis(alpha_p_beta_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_1, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_2, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_3, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_5, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_beta_10, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+# Over theta_0
+hypothesis(alpha_p_theta_0_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_theta_0_03, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_theta_0_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_theta_0_07, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_theta_0_09, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+```
+
+# Theta_0
+```{r}
+# Update data for interactions
+# Over alpha_r
+theta_0_alpha_r_01 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.1, ], seed = 1)
+theta_0_alpha_r_03 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.3, ], seed = 1)
+theta_0_alpha_r_05 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.5, ], seed = 1)
+theta_0_alpha_r_07 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.7, ], seed = 1)
+theta_0_alpha_r_09 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_pos_p == 0.9, ], seed = 1)
+# Over alpha_p
+theta_0_alpha_p_01 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.1, ], seed = 1)
+theta_0_alpha_p_03 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.3, ], seed = 1)
+theta_0_alpha_p_05 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.5, ], seed = 1)
+theta_0_alpha_p_07 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.7, ], seed = 1)
+theta_0_alpha_p_09 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_alpha_neg_p == 0.9, ], seed = 1)
+# Over beta
+theta_0_beta_01 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 0.1, ], seed = 1)
+theta_0_beta_05 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 0.5, ], seed = 1)
+theta_0_beta_1 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 1, ], seed = 1)
+theta_0_beta_2 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 2, ], seed = 1)
+theta_0_beta_3 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 3, ], seed = 1)
+theta_0_beta_5 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 5, ], seed = 1)
+theta_0_beta_10 <- update(theta_0_cor, newdata = fit_summary[fit_summary$true_beta == 10, ], seed = 1)
+
+
+# Summary
+# Over alpha_r
+summary(theta_0_alpha_r_01)
+summary(theta_0_alpha_r_03)
+summary(theta_0_alpha_r_05)
+summary(theta_0_alpha_r_07)
+summary(theta_0_alpha_r_09)
+# Over alpha_p
+summary(theta_0_alpha_p_01)
+summary(theta_0_alpha_p_03)
+summary(theta_0_alpha_p_05)
+summary(theta_0_alpha_p_07)
+summary(theta_0_alpha_p_09)
+# Over beta
+summary(theta_0_beta_01)
+summary(theta_0_beta_05)
+summary(theta_0_beta_1)
+summary(theta_0_beta_2)
+summary(theta_0_beta_3)
+summary(theta_0_beta_5)
+summary(theta_0_beta_10)
+
+
+# Test hypotheses
+# Over alpha_r
+hypothesis(theta_0_alpha_r_01, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_r_03, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_r_05, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_r_07, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_r_09, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+# Over alpha_p
+hypothesis(theta_0_alpha_p_01, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_p_03, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_p_05, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_p_07, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_alpha_p_09, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+# Over beta
+hypothesis(theta_0_beta_01, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_05, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_1, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_2, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_3, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_5, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+hypothesis(theta_0_beta_10, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+```
+
+
+### BETA SUBSET
+Running the above on subsets of data only including beta-values which led to correlations >= 0.5 to inspect how that affects the recovery of the parameters.
+
+```{r}
+# Subset for plots and correlations
+
+# Alpha_r subset
+fit_round_alpha_r <- fit_round %>% filter(true_beta >= 1 & true_beta <= 3)
+fit_summary_alpha_r <- fit_summary %>% filter(true_beta >= 1 & true_beta <= 3)
+
+# Alpha_p subset
+fit_round_alpha_p <- fit_round %>% filter(true_beta >= 1 & true_beta <= 3)
+fit_summary_alpha_p <- fit_summary %>% filter(true_beta >= 1 & true_beta <= 3)
+
+# Theta_0 subset
+fit_round_theta_0 <- fit_round %>% filter(true_beta >= 0.5 & true_beta <= 5)
+fit_summary_theta_0 <- fit_summary %>% filter(true_beta >= 0.5 & true_beta <= 5)
+```
+
+## Overall plots for each parameter in the model
+```{r}
+# Alpha pos
+recovery_overall(fit_round_alpha_r, "true_alpha_pos_p", "alpha_pos_posterior_p", "Alpha_r", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/sub/overall_alpha_r_sub.png"), width = 4.2, height = 5)
+# Alpha neg
+recovery_overall(fit_round_alpha_p, "true_alpha_neg_p", "alpha_neg_posterior_p", "Alpha_p", y_labs = c(0.1, 0.3, 0.5, 0.7, 0.9))
+ggsave(paste0("output/", sim_data, "/sub/overall_alpha_p_sub.png"), width = 4.2, height = 5)
+# Theta0
+recovery_overall(fit_round_theta_0, "true_theta0_log", "theta0_posterior_log", "Theta_0", y_labs = c(-2.2, -0.85, 0, 0.85, 2.2))
+ggsave(paste0("output/", sim_data, "/sub/overall_theta0_sub.png"), width = 4.2, height = 5)
+```
+
+
+### Correlations
+Allows us to get the correlations as part of the "residual correlations"
+
+## Overall correlations
+```{r}
+# Run models on subsets of data
+alpha_r_cor_sub <- update(alpha_pos_cor, newdata = fit_summary_alpha_r, seed = 1)
+alpha_p_cor_sub <- update(alpha_neg_cor, newdata = fit_summary_alpha_p, seed = 1)
+theta_0_cor_sub <- update(theta_0_cor, newdata = fit_summary_theta_0, seed = 1)
+
+# Summary
+summary(alpha_r_cor_sub)
+summary(alpha_p_cor_sub)
+summary(theta_0_cor_sub)
+
+# Get parameter/variable names
+variables(alpha_r_cor_sub)
+variables(alpha_p_cor_sub)
+variables(theta_0_cor_sub)
+
+# Test hypotheses
+hypothesis(alpha_r_cor_sub, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)
+hypothesis(alpha_p_cor_sub, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)
+hypothesis(theta_0_cor_sub, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)
+```

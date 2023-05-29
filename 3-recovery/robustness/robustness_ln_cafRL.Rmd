@@ -1,0 +1,473 @@
+# Robustness ln cafRL (LN-cafRL)
+
+# Load packages and functions
+```{r}
+# Load packages
+pacman::p_load(ggplot2, tidyverse, cowplot, RColorBrewer, brms)
+options(dplyr.summarise.inform = FALSE)
+
+# Set to source file location 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+source("../../utils/quality_check_functions.R")
+```
+
+
+# Load data for beta = 1
+```{r}
+# Reset and specify model
+fixed1_fit_all = NULL
+sim_data = "ln_cafRL_fixed_1"
+
+# Load data saved in csv
+#fixed1_fit_all <- read_csv(paste0("output/ln_cafRL_fixed_1.csv"))
+
+# Load data anew
+param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+
+# NB this can take a long time, when loading many models
+for (i in 1:nrow(param_combination[param_combination$n_agent == 1,])){ # loading for n_agent = 1
+ 
+  fit = as.data.frame(readRDS(paste0("../fitting/output/sim_", sim_data, "/model_ln_cafRL_fixedbeta/fit_", i, ".rds")))
+  fit$model = "ln_cafRL_fixed1"
+  
+  fit = fit[,1:15] # subset relevant columns
+  fit$id = i
+  fit$n_agent = param_combination$n_agent[i]
+  fit$true_alpha_pos_p = param_combination$alpha_pos[i]
+  fit$true_alpha_pos_log = logit_scaled(param_combination$alpha_pos[i])
+  fit$true_alpha_neg_p = param_combination$alpha_neg[i]
+  fit$true_alpha_neg_log = logit_scaled(param_combination$alpha_neg[i])
+  fit$true_beta = param_combination$beta[i]
+  fit$true_theta0_p = inv_logit_scaled(param_combination$theta0[i])
+  fit$true_theta0_log = param_combination$theta0[i]
+  
+  # Create new dataframe or bind to existing
+  if (exists("fixed1_fit_all")) {fixed1_fit_all = rbind(fixed1_fit_all, fit)} 
+  else {fixed1_fit_all = fit}
+}
+
+# Save csv
+#write_csv(fixed1_fit_all, "output/ln_cafRL_fixed_1.csv")
+
+# Summarise data
+fixed1_fit_summary = fixed1_fit_all %>% 
+    group_by(id, true_alpha_pos_p, true_alpha_neg_p, true_beta, true_theta0_p) %>% 
+    summarise(true_alpha_pos_log = mean(true_alpha_pos_log),
+              true_alpha_neg_log = mean(true_alpha_neg_log),
+              true_beta = mean(true_beta),
+              true_theta0_log = mean(true_theta0_log),
+              alpha_pos_posterior_log = mean(alpha_pos_posterior_log),
+              alpha_pos_posterior_p = mean(alpha_pos_posterior_p),
+              alpha_neg_posterior_log = mean(alpha_neg_posterior_log),
+              alpha_neg_posterior_p = mean(alpha_neg_posterior_p),
+              theta0_posterior_log = mean(theta0_posterior_log),
+              theta0_posterior_p = mean(theta0_posterior_p))
+              
+
+# Round values
+fixed1_fit_round <- data.frame(lapply(fixed1_fit_summary, function(x) if(is.numeric(x)) round(x, 2) else x))
+```
+
+# Load data for beta = 2
+```{r}
+# Reset and specify model
+fixed2_fit_all = NULL
+sim_data = "ln_cafRL"
+
+# Load data saved in csv
+#fixed2_fit_all <- read_csv(paste0("../parameter_recovery/output/", sim_data, "/fit_all.csv"))
+
+# Load data anew
+param_combination = readRDS(paste0("../fitting/output/sim_", sim_data, "/param_combination.rds"))
+
+for (i in 1:nrow(param_combination[param_combination$n_agent == 1,])){ # loading only the 1 agents for now
+ 
+  # NB this can take a long time, when loading many models
+  fit = as.data.frame(readRDS(paste0("../fitting/output/sim_", sim_data, "/model_ln_cafRL_fixedbeta/fit_", i, ".rds")))
+  fit$model = "ln_cafRL_fixed2"
+  
+  fit = fit[,1:15] # subset relevant columns
+  fit$id = i
+  fit$n_agent = param_combination$n_agent[i]
+  fit$true_alpha_pos_p = param_combination$alpha_pos[i]
+  fit$true_alpha_pos_log = logit_scaled(param_combination$alpha_pos[i])
+  fit$true_alpha_neg_p = param_combination$alpha_neg[i]
+  fit$true_alpha_neg_log = logit_scaled(param_combination$alpha_neg[i])
+  fit$true_beta = param_combination$beta[i]
+  fit$true_theta0_p = inv_logit_scaled(param_combination$theta0[i])
+  fit$true_theta0_log = param_combination$theta0[i]
+  
+  # Create new dataframe or bind to existing
+  if (exists("fixed2_fit_all")) {fixed2_fit_all = rbind(fixed2_fit_all, fit)} 
+  else {fixed2_fit_all = fit}
+}
+
+# Save csv
+#write_csv(fixed2_fit_all, "output/ln_cafRL_fixed_2.csv")
+
+# Summarise data
+fixed2_fit_summary = fixed2_fit_all %>% 
+    group_by(id, true_alpha_pos_p, true_alpha_neg_p, true_beta, true_theta0_p) %>% 
+    summarise(true_alpha_pos_log = mean(true_alpha_pos_log),
+              true_alpha_neg_log = mean(true_alpha_neg_log),
+              true_beta = mean(true_beta),
+              true_theta0_log = mean(true_theta0_log),
+              alpha_pos_posterior_log = mean(alpha_pos_posterior_log),
+              alpha_pos_posterior_p = mean(alpha_pos_posterior_p),
+              alpha_neg_posterior_log = mean(alpha_neg_posterior_log),
+              alpha_neg_posterior_p = mean(alpha_neg_posterior_p),
+              theta0_posterior_log = mean(theta0_posterior_log),
+              theta0_posterior_p = mean(theta0_posterior_p))
+              
+
+# Round values
+fixed2_fit_round <- data.frame(lapply(fixed2_fit_summary, function(x) if(is.numeric(x)) round(x, 3) else x))
+```
+
+# General parameters
+```{r}
+# Defining labels for probability scale parameters
+p_scale = c(0.1, 0.3, 0.5, 0.7, 0.9)
+
+# Alpha
+# Fixed 1
+recovery_overall(fixed1_fit_round, "true_alpha_p", "alpha_posterior_p", "Alpha (Beta constant = 1)", y_labs = p_scale)
+
+# Fixed 2
+recovery_overall(fixed2_fit_round, "true_alpha_p", "alpha_posterior_p", "Alpha (Beta constant = 2)", y_labs = p_scale)
+
+# Theta0
+# Fixed 1
+recovery_overall(fixed1_fit_round, "true_theta0_p", "theta0_posterior_p", "Theta0 (Beta constant = 1)", y_labs = p_scale)
+
+# Fixed 2
+recovery_overall(fixed2_fit_round, "true_theta0_p", "theta0_posterior_p", "Theta0 (Beta constant = 2)", y_labs = p_scale)
+```
+
+# Specific alpha
+```{r}
+# For all beta values
+recovery_over_var_3(fixed1_fit_round, "true_alpha_p", "alpha_posterior_p", "true_beta", "Beta", "Alpha (Beta constant = 1)", y_labs = p_scale)
+recovery_over_var_3(fixed2_fit_round, "true_alpha_p", "alpha_posterior_p", "true_beta", "Beta", "Alpha (Beta constant = 2)", y_labs = p_scale)
+
+# For most important beta values
+recovery_over_var_3(fixed1_fit_round[fixed1_fit_round$true_beta >= 0.5 &  fixed1_fit_round$true_beta <= 2.5,], "true_alpha_p", "alpha_posterior_p", "true_beta", "Beta", "Alpha", y_labs = p_scale)
+recovery_over_var_3(fixed2_fit_round[fixed2_fit_round$true_beta >= 0.5 &  fixed2_fit_round$true_beta <= 2.5,], "true_alpha_p", "alpha_posterior_p", "true_beta", "Beta", "Alpha", y_labs = p_scale)
+```
+
+# Specific theta0
+```{r}
+# For all beta values
+recovery_over_var_3(fixed1_fit_round, "true_theta0_log", "theta0_posterior_log", "true_beta", "Beta", "Theta0 (Beta constant = 1)", y_labs = p_scale)
+recovery_over_var_3(fixed2_fit_round, "true_theta0_log", "theta0_posterior_log", "true_beta", "Beta", "Theta0 (Beta constant = 2)", y_labs = p_scale)
+
+# For most important beta values
+recovery_over_var_3(fixed1_fit_round[fixed1_fit_round$true_beta >= 0.5 &  fixed1_fit_round$true_beta <= 2.5,], "true_theta0_log", "theta0_posterior_log", "true_beta", "Beta", "Theta0", y_labs = p_scale)
+recovery_over_var_3(fixed2_fit_round[fixed2_fit_round$true_beta >= 0.5 &  fixed2_fit_round$true_beta <= 2.5,], "true_theta0_log", "theta0_posterior_log", "true_beta", "Beta", "Theta0", y_labs = p_scale)
+```
+
+## Correlations
+
+# Correlations fixed 1 - Alpha pos
+```{r}
+# Formula
+f_alpha_pos <- bf(mvbind(true_alpha_pos_p, alpha_pos_posterior_p) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_pos_cor <- brm(
+  formula = f_alpha_pos,
+  data = fixed1_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+alpha_r_beta_01 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_r_beta_05 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_r_beta_1 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 1, ], seed = 1)
+alpha_r_beta_2 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 2, ], seed = 1)
+alpha_r_beta_3 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 3, ], seed = 1)
+alpha_r_beta_5 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 5, ], seed = 1)
+alpha_r_beta_10 <- update(alpha_pos_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+alpha_pos_cor_1 <- rbind(beta_01 = summary(alpha_r_beta_01)$rescor_pars,
+                   beta_05 = summary(alpha_r_beta_05)$rescor_pars,
+                   beta_1 = summary(alpha_r_beta_1)$rescor_pars,
+                   beta_2 = summary(alpha_r_beta_2)$rescor_pars,
+                   beta_3 = summary(alpha_r_beta_3)$rescor_pars,
+                   beta_5 = summary(alpha_r_beta_5)$rescor_pars,
+                   beta_10 =summary(alpha_r_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+alpha_pos_er_1 <- rbind(beta_01 = hypothesis(alpha_r_beta_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(alpha_r_beta_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(alpha_r_beta_1, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(alpha_r_beta_2, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(alpha_r_beta_3, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(alpha_r_beta_5, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(alpha_r_beta_10, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+alpha_pos_all_1 <- round(cbind(alpha_pos_cor_1, alpha_pos_er_1),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```                 
+
+# Correlations fixed 1 - Alpha neg
+```{r}
+# Formula
+f_alpha_neg <- bf(mvbind(true_alpha_neg_p, alpha_neg_posterior_p) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_neg_cor <- brm(
+  formula = f_alpha_neg,
+  data = fixed1_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+alpha_p_beta_01 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_p_beta_05 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_p_beta_1 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 1, ], seed = 1)
+alpha_p_beta_2 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 2, ], seed = 1)
+alpha_p_beta_3 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 3, ], seed = 1)
+alpha_p_beta_5 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 5, ], seed = 1)
+alpha_p_beta_10 <- update(alpha_neg_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+alpha_neg_cor_1 <- rbind(beta_01 = summary(alpha_p_beta_01)$rescor_pars,
+                   beta_05 = summary(alpha_p_beta_05)$rescor_pars,
+                   beta_1 = summary(alpha_p_beta_1)$rescor_pars,
+                   beta_2 = summary(alpha_p_beta_2)$rescor_pars,
+                   beta_3 = summary(alpha_p_beta_3)$rescor_pars,
+                   beta_5 = summary(alpha_p_beta_5)$rescor_pars,
+                   beta_10 =summary(alpha_p_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+alpha_neg_er_1 <- rbind(beta_01 = hypothesis(alpha_p_beta_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(alpha_p_beta_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(alpha_p_beta_1, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(alpha_p_beta_2, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(alpha_p_beta_3, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(alpha_p_beta_5, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(alpha_p_beta_10, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+alpha_neg_all_1 <- round(cbind(alpha_neg_cor_1, alpha_neg_er_1),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```
+
+# Correlations fixed 1 - Theta_0
+```{r}
+# Formula
+f_theta_0 <- bf(mvbind(true_theta0_log, theta0_posterior_log) ~ 1) + set_rescor(TRUE)
+
+# Run models
+theta_0_cor <- brm(
+  formula = f_theta_0,
+  data = fixed1_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+theta_0_beta_01 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.1, ], seed = 1)
+theta_0_beta_05 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 0.5, ], seed = 1)
+theta_0_beta_1 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 1, ], seed = 1)
+theta_0_beta_2 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 2, ], seed = 1)
+theta_0_beta_3 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 3, ], seed = 1)
+theta_0_beta_5 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 5, ], seed = 1)
+theta_0_beta_10 <- update(theta_0_cor, newdata = fixed1_fit_summary[fixed1_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+theta_0_cor_1 <- rbind(beta_01 = summary(theta_0_beta_01)$rescor_pars,
+                   beta_05 = summary(theta_0_beta_05)$rescor_pars,
+                   beta_1 = summary(theta_0_beta_1)$rescor_pars,
+                   beta_2 = summary(theta_0_beta_2)$rescor_pars,
+                   beta_3 = summary(theta_0_beta_3)$rescor_pars,
+                   beta_5 = summary(theta_0_beta_5)$rescor_pars,
+                   beta_10 =summary(theta_0_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+theta_0_er_1 <- rbind(beta_01 = hypothesis(theta_0_beta_01, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(theta_0_beta_05, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(theta_0_beta_1, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(theta_0_beta_2, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(theta_0_beta_3, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(theta_0_beta_5, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(theta_0_beta_10, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+theta_0_all_1 <- round(cbind(theta_0_cor_1, theta_0_er_1),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```
+
+
+# Correlations fixed 2 - Alpha pos
+```{r}
+# Formula
+f_alpha_pos <- bf(mvbind(true_alpha_pos_p, alpha_pos_posterior_p) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_pos_cor <- brm(
+  formula = f_alpha_pos,
+  data = fixed2_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+alpha_r_beta_01 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_r_beta_05 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_r_beta_1 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 1, ], seed = 1)
+alpha_r_beta_2 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 2, ], seed = 1)
+alpha_r_beta_3 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 3, ], seed = 1)
+alpha_r_beta_5 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 5, ], seed = 1)
+alpha_r_beta_10 <- update(alpha_pos_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+alpha_pos_cor_2 <- rbind(beta_01 = summary(alpha_r_beta_01)$rescor_pars,
+                   beta_05 = summary(alpha_r_beta_05)$rescor_pars,
+                   beta_1 = summary(alpha_r_beta_1)$rescor_pars,
+                   beta_2 = summary(alpha_r_beta_2)$rescor_pars,
+                   beta_3 = summary(alpha_r_beta_3)$rescor_pars,
+                   beta_5 = summary(alpha_r_beta_5)$rescor_pars,
+                   beta_10 =summary(alpha_r_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+alpha_pos_er_2 <- rbind(beta_01 = hypothesis(alpha_r_beta_01, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(alpha_r_beta_05, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(alpha_r_beta_1, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(alpha_r_beta_2, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(alpha_r_beta_3, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(alpha_r_beta_5, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(alpha_r_beta_10, "rescor__truealphaposp__alphaposposteriorp > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+alpha_pos_all_2 <- round(cbind(alpha_pos_cor_2, alpha_pos_er_2),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```                 
+
+# Correlations fixed 2 - Alpha neg
+```{r}
+# Formula
+f_alpha_neg <- bf(mvbind(true_alpha_neg_p, alpha_neg_posterior_p) ~ 1) + set_rescor(TRUE)
+
+# Run models
+alpha_neg_cor <- brm(
+  formula = f_alpha_neg,
+  data = fixed2_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+alpha_p_beta_01 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.1, ], seed = 1)
+alpha_p_beta_05 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.5, ], seed = 1)
+alpha_p_beta_1 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 1, ], seed = 1)
+alpha_p_beta_2 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 2, ], seed = 1)
+alpha_p_beta_3 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 3, ], seed = 1)
+alpha_p_beta_5 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 5, ], seed = 1)
+alpha_p_beta_10 <- update(alpha_neg_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+alpha_neg_cor_2 <- rbind(beta_01 = summary(alpha_p_beta_01)$rescor_pars,
+                   beta_05 = summary(alpha_p_beta_05)$rescor_pars,
+                   beta_1 = summary(alpha_p_beta_1)$rescor_pars,
+                   beta_2 = summary(alpha_p_beta_2)$rescor_pars,
+                   beta_3 = summary(alpha_p_beta_3)$rescor_pars,
+                   beta_5 = summary(alpha_p_beta_5)$rescor_pars,
+                   beta_10 =summary(alpha_p_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+alpha_neg_er_2 <- rbind(beta_01 = hypothesis(alpha_p_beta_01, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(alpha_p_beta_05, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(alpha_p_beta_1, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(alpha_p_beta_2, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(alpha_p_beta_3, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(alpha_p_beta_5, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(alpha_p_beta_10, "rescor__truealphanegp__alphanegposteriorp > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+alpha_neg_all_2 <- round(cbind(alpha_neg_cor_2, alpha_neg_er_2),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```
+
+# Correlations fixed 2 - Theta_0
+```{r}
+# Formula
+f_theta_0 <- bf(mvbind(true_theta0_log, theta0_posterior_log) ~ 1) + set_rescor(TRUE)
+
+# Run models
+theta_0_cor <- brm(
+  formula = f_theta_0,
+  data = fixed2_fit_summary,
+  family = gaussian,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99,
+                 max_treedepth = 20),
+  seed = 1)
+
+# Update with beta subsets
+theta_0_beta_01 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.1, ], seed = 1)
+theta_0_beta_05 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 0.5, ], seed = 1)
+theta_0_beta_1 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 1, ], seed = 1)
+theta_0_beta_2 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 2, ], seed = 1)
+theta_0_beta_3 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 3, ], seed = 1)
+theta_0_beta_5 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 5, ], seed = 1)
+theta_0_beta_10 <- update(theta_0_cor, newdata = fixed2_fit_summary[fixed2_fit_summary$true_beta == 10, ], seed = 1)
+
+# Get correlation estimates, CIs, etc.
+theta_0_cor_2 <- rbind(beta_01 = summary(theta_0_beta_01)$rescor_pars,
+                   beta_05 = summary(theta_0_beta_05)$rescor_pars,
+                   beta_1 = summary(theta_0_beta_1)$rescor_pars,
+                   beta_2 = summary(theta_0_beta_2)$rescor_pars,
+                   beta_3 = summary(theta_0_beta_3)$rescor_pars,
+                   beta_5 = summary(theta_0_beta_5)$rescor_pars,
+                   beta_10 =summary(theta_0_beta_10)$rescor_pars)
+
+# Get Evidence Ratios
+theta_0_er_2 <- rbind(beta_01 = hypothesis(theta_0_beta_01, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_05 = hypothesis(theta_0_beta_05, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_1 = hypothesis(theta_0_beta_1, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_2 = hypothesis(theta_0_beta_2, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_3 = hypothesis(theta_0_beta_3, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_5 = hypothesis(theta_0_beta_5, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6],
+                  beta_10 =hypothesis(theta_0_beta_10, "rescor__truetheta0log__theta0posteriorlog > 0.5", class = NULL)[[1]][6])
+
+# Bind correlation estimates and ERs
+theta_0_all_2 <- round(cbind(theta_0_cor_2, theta_0_er_2),2) %>% 
+  mutate(true_beta = c(0.1, 0.5, 1, 2, 3, 5, 10))
+```
+
+# Inspecting correlations
+```{r}
+# Alpha pos
+mean(alpha_pos_all_1$Estimate[alpha_pos_all_1$true_beta >= 0.5 & alpha_pos_all_1$true_beta <= 2.5])
+mean(alpha_pos_all_2$Estimate[alpha_pos_all_2$true_beta >= 0.5 & alpha_pos_all_2$true_beta <= 2.5])
+
+# Alpha neg
+mean(alpha_neg_all_1$Estimate[alpha_neg_all_1$true_beta >= 0.5 & alpha_neg_all_1$true_beta <= 2.5])
+mean(alpha_neg_all_2$Estimate[alpha_neg_all_2$true_beta >= 0.5 & alpha_neg_all_2$true_beta <= 2.5])
+
+# Theta_0
+mean(theta_0_all_1$Estimate[theta_0_all_1$true_beta >= 0.5 & theta_0_all_1$true_beta <= 2.5])
+mean(theta_0_all_2$Estimate[theta_0_all_2$true_beta >= 0.5 & theta_0_all_2$true_beta <= 2.5])
+```

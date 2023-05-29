@@ -1,0 +1,188 @@
+# Script to prepare fitting of models for recovery
+
+# Load packages
+```{r}
+# Load packages
+pacman::p_load(cmdstanr)
+```
+
+# Compile models
+```{r}
+# Y-RL
+file = file.path("../../2-models/yearsley/yearsley_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# T-fRL
+file = file.path("../../2-models/talwar/1_fRL/fRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# T-cafRL with all free parameters
+file = file.path("../../2-models/talwar/2_cafRL/cafRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# T-cafRL with beta fixed
+file = file.path("../../2-models/talwar/2_cafRL/cafRL_alpha_theta0_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# LN-fRL with all free parameters
+file = file.path("../../2-models/ln/1_ln_fRL/ln_fRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# LN-cafRL with all free parameters
+file = file.path("../../2-models/ln/2_ln_cafRL/ln_cafRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+# LN-fRL with beta fixed
+file = file.path("../../2-models/ln/2_ln_cafRL/ln_cafRL_alpha_pos_alpha_neg_theta0_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+# Create folders based on simulation data
+```{r}
+for (model in c("yearsley", "talwar_fRL", "talwar_cafRL", "ln_fRL", "ln_cafRL")) {
+  out_path_sim = paste0("output/sim_", model)
+  dir.create(file.path(out_path_sim), showWarnings = FALSE)
+}
+```
+
+# Prepare parameter combinations used to simulate data
+```{r}
+# Y-RL
+# Define parameter values
+n_agents1 = c(1)
+n_agents10_50 = c(10, 50)
+fs = c(0.1, 0.3, 0.5, 0.7, 0.9)
+alpha_poss = c(0.1, 0.3, 0.5, 0.7, 0.9)
+alpha_negs = c(0.1, 0.3, 0.5, 0.7, 0.9)
+
+# Create parameter combinations (repeat the ones with agent = 1 to have equal amounts in model recovery)
+param_combination1 = expand.grid(n_agent=n_agents1, f=fs, alpha_pos=alpha_poss, alpha_neg=alpha_negs)
+param_combination_rep = do.call("rbind", replicate(875/nrow(param_combination1), param_combination1, simplify = FALSE))
+param_combination10_50 = expand.grid(n_agent=n_agents10_50, f=fs, alpha_pos=alpha_poss, alpha_neg=alpha_negs)
+param_combination = rbind(param_combination_rep, param_combination10_50)
+
+# Add seeds for reproducability
+for (row in 1:nrow(param_combination)) {
+  seeds = sample(1:100000, param_combination$n_agent[row])
+  param_combination$sim_seeds[row] = list(seeds)
+}
+
+# Save parameter combinations
+saveRDS(param_combination, paste0("output/sim_yearsley/param_combination.rds"))
+
+```
+
+```{r}
+# T-fRL
+# Define parameter values
+n_agents1 = c(1)
+n_agents10_50 = c(10, 50)
+alphas = c(0.1, 0.3, 0.5, 0.7, 0.9)
+betas = c(0.1, 0.5, 1, 2, 3, 5, 10)
+
+# Create parameter combinations (repeat the ones with agent = 1 to have equal amounts in model recovery)
+param_combination1 = expand.grid(n_agent=n_agents1, alpha=alphas, beta=betas)
+param_combination_rep = do.call("rbind", replicate(ceiling(875/nrow(param_combination1)), param_combination1, simplify = FALSE))[1:875,]
+param_combination10_50 = expand.grid(n_agent=n_agents10_50, alpha=alphas, beta=betas)
+param_combination = rbind(param_combination_rep, param_combination10_50)
+
+# Add seeds for reproducability
+for (row in 1:nrow(param_combination)) {
+  seeds = sample(1:100000, param_combination$n_agent[row])
+  param_combination$sim_seeds[row] = list(seeds)
+}
+
+# Save parameter combintations
+saveRDS(param_combination, paste0("output/sim_talwar_fRL/param_combination.rds"))
+```
+
+```{r}
+# T-cafRL
+# Define parameter values
+n_agents1 = c(1)
+n_agents10_50 = c(10, 50)
+alphas = c(0.1, 0.3, 0.5, 0.7, 0.9)
+betas = c(0.1, 0.5, 1, 2, 3, 5, 10)
+theta0s = brms::logit_scaled(c(0.1, 0.3, 0.5, 0.7, 0.9))
+
+# Create parameter combinations (repeat the ones with agent = 1 to have equal amounts in model recovery)
+param_combination1 = expand.grid(n_agent=n_agents1, alpha=alphas, beta=betas, theta0=theta0s)
+param_combination_rep = do.call("rbind", replicate(ceiling(875/nrow(param_combination1)), param_combination1, simplify = FALSE))[1:875,]
+param_combination10_50 = expand.grid(n_agent=n_agents10_50, alpha=alphas, beta=betas, theta0=theta0s)
+param_combination = rbind(param_combination_rep, param_combination10_50)
+
+# Add seeds for reproducability
+for (row in 1:nrow(param_combination)) {
+  seeds = sample(1:100000, param_combination$n_agent[row])
+  param_combination$sim_seeds[row] = list(seeds)
+}
+
+# Save parameter combinations
+saveRDS(param_combination, paste0("output/sim_talwar_cafRL/param_combination.rds"))
+
+```
+
+```{r}
+# LN-fRL
+# Define parameter values
+n_agents1 = c(1)
+n_agents10_50 = c(10, 50)
+alpha_poss = c(0.1, 0.3, 0.5, 0.7, 0.9)
+alpha_negs = c(0.1, 0.3, 0.5, 0.7, 0.9)
+betas = c(0.1, 0.5, 1, 2, 3, 5, 10)
+
+# Create parameter combinations (repeat the ones with agent = 1 to have equal amounts in model recovery)
+param_combination1 = expand.grid(n_agent=n_agents1, alpha_pos=alpha_poss, alpha_neg=alpha_negs, beta=betas)
+param_combination_rep = do.call("rbind", replicate(ceiling(875/nrow(param_combination1)), param_combination1, simplify = FALSE))[1:875,]
+param_combination10_50 = expand.grid(n_agent=n_agents10_50, alpha_pos=alpha_poss, alpha_neg=alpha_negs, beta=betas)
+param_combination = rbind(param_combination_rep, param_combination10_50)
+
+# Add seeds for reproducability
+for (row in 1:nrow(param_combination)) {
+  seeds = sample(1:100000, param_combination$n_agent[row])
+  param_combination$sim_seeds[row] = list(seeds)
+}
+
+# Save parameter combiantions
+saveRDS(param_combination, paste0("output/sim_ln_fRL/param_combination.rds"))
+
+```
+
+```{r}
+# LN-cafRL
+# Define parameter values
+n_agents1 = c(1)
+n_agents10_50 = c(10, 50)
+alpha_poss = c(0.1, 0.3, 0.5, 0.7, 0.9)
+alpha_negs = c(0.1, 0.3, 0.5, 0.7, 0.9)
+betas = c(0.1, 0.5, 1, 2, 3, 5, 10)
+theta0s = brms::logit_scaled(c(0.1, 0.3, 0.5, 0.7, 0.9))
+
+# Create parameter combinations (repeat the ones with agent = 1 to have equal amounts in model recovery)
+param_combination1 = expand.grid(n_agent=n_agents1, alpha_pos=alpha_poss, alpha_neg=alpha_negs, beta=betas, theta0=theta0s)
+param_combination_rep = do.call("rbind", replicate(ceiling(875/nrow(param_combination1)), param_combination1, simplify = FALSE))[1:875,]
+param_combination10_50 = expand.grid(n_agent=n_agents10_50, alpha_pos=alpha_poss, alpha_neg=alpha_negs, beta=betas, theta0=theta0s)
+param_combination = rbind(param_combination_rep, param_combination10_50)
+  
+# Add seeds for reproducability
+for (row in 1:nrow(param_combination)) {
+  seeds = sample(1:100000, param_combination$n_agent[row])
+  param_combination$sim_seeds[row] = list(seeds)
+}
+
+# Save parameter combinations
+saveRDS(param_combination, paste0("output/sim_ln_cafRL/param_combination.rds"))
+
+```
