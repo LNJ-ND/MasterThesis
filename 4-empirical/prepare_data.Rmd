@@ -1,0 +1,40 @@
+# Preparing data for fitting
+
+This is the script used to prepare the empirical data for fitting.
+
+# Load packages
+```{r}
+pacman::p_load(tidyverse)
+```
+
+# Prepare data for fitting
+```{r}
+
+# Load data
+d = read.csv("../data/parsed_IED_150123.csv")
+
+# Rename the columns
+d = d %>% rename(stage = stage.number,
+                 trial = presentation.number)
+
+# Create a unique subject ID
+d$id_unique = paste0(d$MatchID, "_", d$Group)
+
+# Recode the choice to be correct (1) or incorrect (0)
+d$choice = ifelse(d$correct == "yes", 1, 0)
+
+# Recode the stimulus sets
+# Combine the presented features in one string
+d$stimulus_combined = gsub("; ", "", gsub("NA", "", paste0(d$Box.1, d$Box.2, d$Box.3, d$Box.4)))
+# Replace the combined string of features with the stimulus set id
+d$simulus = gsub("S1S2|S2S1|S1L7S2L8|S2L8S1L7|S3L9S4L10|S4L10S3L9|S5L11S6L12|S6L12S5L11", 1,
+                      gsub("S1L8S2L7|S2L7S1L8|S3L10S4L9|S4L9S3L10|S5L12S6L11|S6L11S5L12", 2, d$stimulus_combined))
+
+# Turn the stimulus set into numeric
+d$stimulus = as.numeric(d$stimulus)
+
+# Only keep relevant columns
+d = d[c("id_unique", "stage", "trial", "choice", "stimulus")]
+# Save the dataframe
+write.csv(d, "d_relevant_for_modelling.csv")
+```

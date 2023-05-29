@@ -1,0 +1,131 @@
+# Model comparison on empirical data
+
+This is the script used for model comparison on empirical data
+
+# Load packages
+```{r}
+pacman::p_load(loo, rstan, brms)
+```
+
+# Load models and perform model comparison
+```{r}
+
+df_out = NULL
+df_in = read.csv("../../data/d_relevant_for_modelling.csv")
+subjects = unique(df_in$id_unique)
+
+# Loop through subjects
+for (subject in subjects) {
+  
+  # Load mm loos if they exist, and otherwise the normal loo
+  # Yearsley
+  if (file.exists(paste0("../fitting/output/yearsley/loo_mm_", subject, ".rds"))) {
+    yearsley = readRDS(paste0("../fitting/output/yearsley/loo_mm_", subject, ".rds"))
+  } else {
+     yearsley = readRDS(paste0("../fitting/output/yearsley/loo_", subject, ".rds"))
+  }
+  
+  # T-fRL
+  if (file.exists(paste0("../fitting/output/talwar_fRL/loo_mm_", subject, ".rds"))) {
+    talwar_fRL = readRDS(paste0("../fitting/output/talwar_fRL/loo_mm_", subject, ".rds"))
+  } else {
+     talwar_fRL = readRDS(paste0("../fitting/output/talwar_fRL/loo_", subject, ".rds"))
+  }
+  
+  # T-cafRL
+  if (file.exists(paste0("../fitting/output/talwar_cafRL_fixedbeta/loo_mm_", subject, ".rds"))) {
+    talwar_cafRL = readRDS(paste0("../fitting/output/talwar_cafRL_fixedbeta/loo_mm_", subject, ".rds"))
+  } else {
+    talwar_cafRL = readRDS(paste0("../fitting/output/talwar_cafRL_fixedbeta/loo_", subject, ".rds"))
+  }
+  
+  # LN-fRL
+  if (file.exists(paste0("../fitting/output/ln_fRL/loo_mm_", subject, ".rds"))) {
+    ln_fRL = readRDS(paste0("../fitting/output/ln_fRL/loo_mm_", subject, ".rds"))
+  } else {
+    ln_fRL = readRDS(paste0("../fitting/output/ln_fRL/loo_", subject, ".rds"))
+  }
+  
+  # LN-cafRL
+  if (file.exists(paste0("../fitting/output/ln_cafRL_fixedbeta/loo_mm_", subject, ".rds"))) {
+    ln_cafRL = readRDS(paste0("../fitting/output/ln_cafRL_fixedbeta/loo_mm_", subject, ".rds"))
+  } else {
+    ln_cafRL = readRDS(paste0("../fitting/output/ln_cafRL_fixedbeta/loo_", subject, ".rds"))
+  }
+  
+  # Loo compare
+  compare = loo_compare(list(yearsley = yearsley, 
+                             talwar_fRL = talwar_fRL, 
+                             talwar_cafRL = talwar_cafRL, 
+                             ln_fRL = ln_fRL, 
+                             ln_cafRL = ln_cafRL))
+  
+  # Get the best model
+  best_compare = rownames(compare)[1]
+  
+  # Get all elpd
+  elpd_yearsley = compare["yearsley", 1]
+  elpd_talwar_fRL = compare["talwar_fRL", 1]
+  elpd_talwar_cafRL = compare["talwar_cafRL", 1]
+  elpd_ln_fRL = compare["ln_fRL", 1]
+  elpd_ln_cafRL = compare["ln_cafRL", 1]
+  
+  # Loo stacking weights
+  weights = loo_model_weights(list(yearsley = yearsley, 
+                                   talwar_fRL = talwar_fRL, 
+                                   talwar_cafRL = talwar_cafRL, 
+                                   ln_fRL = ln_fRL, 
+                                   ln_cafRL = ln_cafRL))
+  
+  # Get the best model based on stacking weights
+  best_weights = names(which(weights == max(weights)))
+  
+  # Get all weights
+  weight_yearsley = weights["yearsley"]
+  weight_talwar_fRL = weights["talwar_fRL"]
+  weight_talwar_cafRL = weights["talwar_cafRL"]
+  weight_ln_fRL = weights["ln_fRL"]
+  weight_ln_cafRL = weights["ln_cafRL"]
+  
+  # Add row to dataframe
+  subject_row = data.frame(subject = subject, 
+                           
+                           # Based on elpd
+                           best_compare = best_compare, 
+                           elpd_yearsley = elpd_yearsley,
+                           elpd_talwar_fRL = elpd_talwar_fRL,
+                           elpd_talwar_cafRL = elpd_talwar_cafRL,
+                           elpd_ln_fRL = elpd_ln_fRL,
+                           elpd_ln_cafRL = elpd_ln_cafRL,
+                           
+                           # Based on stacking weights
+                           best_weights = best_weights,
+                           weight_yearsley = weight_yearsley,
+                           weight_talwar_fRL = weight_talwar_fRL,
+                           weight_talwar_cafRL = weight_talwar_cafRL,
+                           weight_ln_fRL = weight_ln_fRL,
+                           weight_ln_cafRL = weight_ln_cafRL)
+  
+  df_out = rbind(df_out, subject_row)
+
+}
+
+# Add group column
+df_out$group = ifelse(grepl( "Control", df_out$subject) == TRUE, "Control", "Schizophrenia")
+
+# Absolute (n best fitted)
+table(df_out$best_compare)
+table(df_out$best_weights)
+
+# Absolute per group (n best fitted)
+table(df_out$best_compare[df_out$group == "Schizophrenia"])
+table(df_out$best_compare[df_out$group == "Control"])
+
+# Average stacking weights
+colMeans(df_out[,9:13])
+
+# Average stacking weights per group
+colMeans(df_out[df_out$group == "Schizophrenia", 9:13])
+colMeans(df_out[df_out$group == "Control", 9:13])
+```
+

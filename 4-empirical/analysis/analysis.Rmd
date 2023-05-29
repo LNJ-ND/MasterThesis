@@ -1,0 +1,290 @@
+# Parameter Analysis
+
+This script contains the code for the parameter analysis of Part 2 of the thesis. 
+
+# Load packages
+```{r}
+pacman::p_load(tidyverse, plotrix)
+```
+
+# Load data/models
+```{r}
+# Load the empirical data
+df_in = read.csv("../../data/d_relevant_for_modelling.csv")
+subjects = unique(df_in$id_unique) 
+
+# Define empty data frame for the draws
+all_draws = data.frame(matrix(nrow = 1600, ncol = 0))
+
+# Loop through the subejcts and load the fitted models by Y-RL
+for (subject in subjects) {
+  
+  # Load fit objects
+  fit <- readRDS(paste0("../fitting/output/yearsley/fit_", subject, ".rds"))
+
+  # Get draws
+  draws_df <- as.data.frame(fit)[10:15]
+  
+  # Add subject column
+  draws_df$subject = subject
+  colnames(draws_df) = paste(colnames(draws_df), subject, sep = "_")
+  
+  # Create dataframe or add participant's draws to existing dataframe
+  if (exists("all_draws")) {all_draws = cbind(all_draws, draws_df)} 
+  else {all_draws = draws_df}
+    
+}
+```
+
+# Comparison of the reward learning rate (alpha_r, here called alpha_pos)
+```{r}
+# Get draws
+alpha_pos_draws = all_draws[, grepl( "alpha_pos_posterior_p" , names(all_draws))]
+alpha_pos_SCZ_draws = alpha_pos_draws[, grepl("Schizophrenia" , names(alpha_pos_draws))]
+alpha_pos_HC_draws = alpha_pos_draws[, grepl("Control" , names(alpha_pos_draws))]
+
+# Calculate means for each group
+alpha_pos_SCZ_draws$average = rowMeans(alpha_pos_SCZ_draws)
+alpha_pos_HC_draws$average = rowMeans(alpha_pos_HC_draws)
+
+# SCZ: Get mean, se and CIs
+mean(alpha_pos_SCZ_draws$average)
+std.error(alpha_pos_SCZ_draws$average)
+confint(lm(average ~ 1, alpha_pos_SCZ_draws))
+
+# CONTROL: Get mean, se and CIs
+mean(alpha_pos_HC_draws$average)
+std.error(alpha_pos_HC_draws$average)
+confint(lm(average ~ 1, alpha_pos_HC_draws))
+
+# COMPARISON with hypothesis test
+alpha_pos_compare = data.frame(cbind(alpha_pos_SCZ_draws$average, alpha_pos_HC_draws$average))
+colnames(alpha_pos_compare) = c("SCZ", "HC")
+brms::hypothesis(alpha_pos_compare, "HC > SCZ", alpha=0.025)
+
+# PLOTS
+# Posterior density of both groups
+ggplot() + 
+  geom_density(aes(alpha_pos_compare$HC, fill = "Control"), alpha = 0.5) +
+  geom_density(aes(alpha_pos_compare$SCZ, fill = "Schizophrenia"), alpha = 0.5) +
+  # Medians
+  geom_vline(xintercept = mean(alpha_pos_compare$HC), color = "lightblue") +
+  geom_vline(xintercept = mean(alpha_pos_compare$SCZ), color = "darkblue") +
+  xlim(0,1) + 
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(fill = "Group", y = "Posterior Density", x = "Alpha_r", ) +
+  theme_classic() 
+
+#ggsave("hist_alpha_pos.png", width=9, height=8)
+
+# Difference between groups
+ggplot() + 
+  geom_density(aes(alpha_pos_compare$HC - alpha_pos_compare$SCZ), fill = "grey", alpha = 0.6) +
+  geom_vline(xintercept = (mean(alpha_pos_compare$HC)-mean(alpha_pos_compare$SCZ)), color = "red") +
+  labs(fill = "Alpha_r Posterior Difference") +
+  theme_classic()
+
+# Funnel plot for each subject
+long_alpha_pos_draws = alpha_pos_draws %>% pivot_longer(everything(), names_to = "param_subject")
+long_alpha_pos_draws$subject = str_replace_all(long_alpha_pos_draws$param_subject, "alpha_pos_posterior_p_", "")
+long_alpha_pos_draws$id = str_split_fixed(long_alpha_pos_draws$subject, "_", 2)[,1]
+long_alpha_pos_draws$group = str_split_fixed(long_alpha_pos_draws$subject, "_", 2)[,2]
+long_alpha_pos_draws$id <- formatC(as.integer(long_alpha_pos_draws$id), width = 3, format = "d", flag = "0")
+long_alpha_pos_draws$id_ordered <- as.integer(ifelse(long_alpha_pos_draws$group == "Control", paste0(1111, long_alpha_pos_draws$id), 
+                                                                                              paste0(9999, long_alpha_pos_draws$id)))
+long_alpha_pos_draws$subject_ordered <- reorder(long_alpha_pos_draws$subject, long_alpha_pos_draws$id_ordered)
+
+ggplot(long_alpha_pos_draws) +
+  ggridges::geom_density_ridges(aes(x = value, y = subject_ordered, fill = group), scale = 5, rel_min_height = 0.02, size = 0.2, alpha=0.7) +
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(y = "Subject", x = "Alpha_r Posterior Distribution", fill="Group") +
+  theme_bw()
+
+#ggsave("funnel_alpha_pos.png", width = 9, height = 8)
+```
+
+# Comparison of the punishment learning rate (alpha_p, here called alpha_neg)
+```{r}
+# Get draws
+alpha_neg_draws = all_draws[, grepl( "alpha_neg_posterior_p" , names(all_draws))]
+alpha_neg_SCZ_draws = alpha_neg_draws[, grepl( "Schizophrenia" , names(alpha_neg_draws))]
+alpha_neg_HC_draws = alpha_neg_draws[, grepl( "Control" , names(alpha_neg_draws))]
+
+# Calculate means
+alpha_neg_SCZ_draws$average = rowMeans(alpha_neg_SCZ_draws)
+alpha_neg_HC_draws$average = rowMeans(alpha_neg_HC_draws)
+
+# SCZ: Get mean, se and CIs
+mean(alpha_neg_SCZ_draws$average)
+std.error(alpha_neg_SCZ_draws$average)
+confint(lm(average ~ 1, alpha_neg_SCZ_draws))
+
+# CONTROL: Get mean, se and CIs
+mean(alpha_neg_HC_draws$average)
+std.error(alpha_neg_HC_draws$average)
+confint(lm(average ~ 1, alpha_neg_HC_draws))
+
+# COMPARISON with hypothesis test
+alpha_neg_compare = data.frame(cbind(alpha_neg_SCZ_draws$average, alpha_neg_HC_draws$average))
+colnames(alpha_neg_compare) = c("SCZ", "HC")
+brms::hypothesis(alpha_neg_compare, "HC > SCZ", alpha=0.025)
+
+
+# PLOTS
+# Posterior density of both groups
+ggplot() + 
+  geom_density(aes(alpha_neg_compare$HC, fill = "Control"), alpha = 0.5) +
+  geom_density(aes(alpha_neg_compare$SCZ, fill = "Schizophrenia"), alpha = 0.5) +
+  # Medians
+  geom_vline(xintercept = mean(alpha_neg_compare$HC), color = "lightblue") +
+  geom_vline(xintercept = mean(alpha_neg_compare$SCZ), color = "darkblue") +
+  xlim(0,1) + 
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(fill = "Group", y = "Posterior Density", x = "Alpha_p", ) +
+  theme_classic() 
+
+#ggsave("hist_alpha_neg.png", width=9, height=8)
+
+# Difference between groups
+ggplot() + 
+  geom_density(aes(alpha_neg_compare$HC - alpha_neg_compare$SCZ), fill = "grey", alpha = 0.6) +
+  geom_vline(xintercept = (mean(alpha_neg_compare$HC)-mean(alpha_neg_compare$SCZ)), color = "red") +
+  labs(fill = "Alpha_p Posterior Difference") +
+  theme_classic()
+
+# Funnel plot for each subject
+long_alpha_neg_draws = alpha_neg_draws %>% pivot_longer(everything(), names_to = "param_subject")
+long_alpha_neg_draws$subject = str_replace_all(long_alpha_neg_draws$param_subject, "alpha_neg_posterior_p_", "")
+long_alpha_neg_draws$id = str_split_fixed(long_alpha_neg_draws$subject, "_", 2)[,1]
+long_alpha_neg_draws$group = str_split_fixed(long_alpha_neg_draws$subject, "_", 2)[,2]
+long_alpha_neg_draws$id <- formatC(as.integer(long_alpha_neg_draws$id), width = 3, format = "d", flag = "0")
+long_alpha_neg_draws$id_ordered <- as.integer(ifelse(long_alpha_neg_draws$group == "Control", paste0(1111, long_alpha_neg_draws$id), 
+                                                                                              paste0(9999, long_alpha_neg_draws$id)))
+long_alpha_neg_draws$subject_ordered <- reorder(long_alpha_neg_draws$subject, long_alpha_neg_draws$id_ordered)
+
+ggplot(long_alpha_neg_draws) +
+  ggridges::geom_density_ridges(aes(x = value, y = subject_ordered, fill = group), scale = 5, rel_min_height = 0.02, size = 0.2, alpha=0.7) +
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(y = "Subject", x = "Alpha_p Posterior Distribution", fill="Group") +
+  theme_bw()
+
+#ggsave("funnel_alpha_neg.png", width = 9, height = 8)
+  
+```
+
+# Comparison of the dimension shift parameter (phi, here called f)
+```{r}
+# Get draws
+f_draws = all_draws[, grepl( "f_posterior_p" , names(all_draws))]
+f_SCZ_draws = f_draws[, grepl( "Schizophrenia" , names(f_draws))]
+f_HC_draws = f_draws[, grepl( "Control" , names(f_draws))]
+
+# Calculate means
+f_SCZ_draws$average = rowMeans(f_SCZ_draws)
+f_HC_draws$average = rowMeans(f_HC_draws)
+
+# SCZ: get mean, se and CIs
+mean(f_SCZ_draws$average)
+std.error(f_SCZ_draws$average)
+confint(lm(average ~ 1, f_SCZ_draws))
+
+# CONTROL: get mean, se and CIs
+mean(f_HC_draws$average)
+std.error(f_HC_draws$average)
+confint(lm(average ~ 1, f_HC_draws))
+
+# COMPARISON with hypothesis test
+f_compare = data.frame(cbind(f_SCZ_draws$average, f_HC_draws$average))
+colnames(f_compare) = c("SCZ", "HC")
+brms::hypothesis(f_compare, "SCZ - HC > 0", alpha=0.025)
+
+
+# PLOTS
+
+# Posterior density of both groups
+ggplot() + 
+  geom_density(aes(f_compare$HC, fill = "Control"), alpha = 0.5) +
+  geom_density(aes(f_compare$SCZ, fill = "Schizophrenia"), alpha = 0.5) +
+  # Medians
+  geom_vline(xintercept = mean(f_compare$HC), color = "lightblue") +
+  geom_vline(xintercept = mean(f_compare$SCZ), color = "darkblue") +
+  xlim(0,1) + 
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(fill = "Group", y = "Posterior Density", x = "Phi", ) +
+  theme_classic() 
+
+#ggsave("hist_f.png", width=9, height=8)
+
+# Difference between groups
+ggplot() + 
+  geom_density(aes(f_compare$HC - f_compare$SCZ), fill = "grey", alpha = 0.6) +
+  geom_vline(xintercept = (mean(f_compare$HC)-mean(f_compare$SCZ)), color = "red") +
+  labs(fill = "Phi Posterior Difference") +
+  theme_classic()
+
+# Funnel plot for each subject
+long_f_draws = f_draws %>% pivot_longer(everything(), names_to = "param_subject")
+long_f_draws$subject = str_replace_all(long_f_draws$param_subject, "f_posterior_p_", "")
+long_f_draws$id = str_split_fixed(long_f_draws$subject, "_", 2)[,1]
+long_f_draws$group = str_split_fixed(long_f_draws$subject, "_", 2)[,2]
+long_f_draws$id <- formatC(as.integer(long_f_draws$id), width = 3, format = "d", flag = "0")
+long_f_draws$id_ordered <- as.integer(ifelse(long_f_draws$group == "Control", paste0(1111, long_f_draws$id), 
+                                                                                              paste0(9999, long_f_draws$id)))
+long_f_draws$subject_ordered <- reorder(long_f_draws$subject, long_f_draws$id_ordered)
+
+ggplot(long_f_draws) +
+  ggridges::geom_density_ridges(aes(x = value, y = subject_ordered, fill = group), scale = 5, rel_min_height = 0.02, size = 0.2, alpha=0.7) +
+  scale_color_manual(values = c("Control" = "lightblue", "Schizophrenia" = "darkblue"), aesthetics = c("fill")) +
+  labs(y = "Subject", x = "Phi Posterior Distribution", fill="Group") +
+  theme_bw()
+
+#ggsave("funnel_phi.png", width = 9, height = 8)
+```
+
+# POST HOC: Testing difference of the reward and punishment learning rates (i.e. alpha_pos, alpha_neg) within each group
+```{r}
+
+# SCZ: testing the difference between alpha neg and alpha pos
+# Alpha pos: getting mean, se and CI
+mean(alpha_pos_SCZ_draws$average)
+std.error(alpha_pos_SCZ_draws$average)
+confint(lm(average ~ 1, alpha_pos_SCZ_draws))
+
+# Alpha neg: getting mean, se and CI
+mean(alpha_neg_SCZ_draws$average)
+std.error(alpha_neg_SCZ_draws$average)
+confint(lm(average ~ 1, alpha_neg_SCZ_draws))
+
+# Comparison with hypothesis test
+alphas_SCZ_compare = data.frame(cbind(alpha_pos_SCZ_draws$average, alpha_neg_SCZ_draws$average))
+colnames(alphas_SCZ_compare) = c("Alpha_r", "Alpha_p")
+brms::hypothesis(alphas_SCZ_compare, "Alpha_p > Alpha_r", alpha = 0.025)
+
+# HC: testing the difference between alpha neg and alpha pos
+# Alpha pos: getting mean, se and CI
+mean(alpha_pos_HC_draws$average)
+std.error(alpha_pos_HC_draws$average)
+confint(lm(average ~ 1, alpha_pos_HC_draws))
+
+# Alpha neg: getting mean, se and CI
+mean(alpha_neg_HC_draws$average)
+std.error(alpha_neg_HC_draws$average)
+confint(lm(average ~ 1, alpha_neg_HC_draws))
+
+# Comparison with hypothesis test
+alphas_HC_compare = data.frame(cbind(alpha_pos_HC_draws$average, alpha_neg_HC_draws$average))
+colnames(alphas_HC_compare) = c("Alpha_r", "Alpha_p")
+brms::hypothesis(alphas_HC_compare, "Alpha_p > Alpha_r", alpha=0.025)
+
+# TESTING FOR INTERACTION
+SCZ_diff = alpha_neg_SCZ_draws$average - alpha_pos_SCZ_draws$average
+HC_diff = alpha_neg_HC_draws$average - alpha_pos_HC_draws$average
+
+mean(SCZ_diff)
+mean(HC_diff)
+
+diff_compare = data.frame(cbind(SCZ_diff, HC_diff))
+colnames(diff_compare) = c("SCZ_diff", "HC_diff")
+brms::hypothesis(diff_compare, "SCZ_diff > HC_diff", alpha=0.025)
+```
+

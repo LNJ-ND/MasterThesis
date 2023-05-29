@@ -1,0 +1,54 @@
+
+```{r}
+library(rstan)
+```
+
+# Compiling models
+```{r}
+# yearsley
+file = file.path("../../2-models-copyforreal/yearsley/yearsley_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# talwar frl
+file = file.path("../../2-models-copyforreal/talwar/1_fRL/fRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# talwar cafrl free beta
+file = file.path("../../2-models-copyforreal/talwar/2_cafRL/cafRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# talwar cafrl fixed beta
+file = file.path("../../2-models-copyforreal/talwar/2_cafRL/cafRL_alpha_theta0_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# ln frl
+file = file.path("../../2-models-copyforreal/ln/1_ln_fRL/ln_fRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# ln cafrl free beta
+file = file.path("../../2-models-copyforreal/ln/2_ln_cafRL/ln_cafRL_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+
+```{r}
+
+# ln cafrl fixed beta
+file = file.path("../../2-models-copyforreal/ln/2_ln_cafRL/ln_cafRL_alpha_pos_alpha_neg_theta0_loglik.stan")
+stan = rstan::stan_model(file, auto_write = T)
+```
+

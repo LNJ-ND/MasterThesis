@@ -6,7 +6,8 @@ yearsley_alpha_neg.stan
 yearsley_alpha_pos.stan
 yearsley_f.stan
 *.zip
-4-empirical/output/
+4-empirical/fitting/output/
+4-empirical/fitting/output_sd1/
 3-recovery/fitting/output/
 data/
 *.csv
