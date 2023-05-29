@@ -1,5 +1,4 @@
 *.rds
-output*/
 x_*/
 fitting_on_1050agents/
 yearsley_alpha_neg.stan
