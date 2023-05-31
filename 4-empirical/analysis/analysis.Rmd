@@ -47,19 +47,23 @@ alpha_pos_HC_draws = alpha_pos_draws[, grepl("Control" , names(alpha_pos_draws))
 alpha_pos_SCZ_draws$average = rowMeans(alpha_pos_SCZ_draws)
 alpha_pos_HC_draws$average = rowMeans(alpha_pos_HC_draws)
 
-# SCZ: Get mean, se and CIs
-mean(alpha_pos_SCZ_draws$average)
-std.error(alpha_pos_SCZ_draws$average)
-confint(lm(average ~ 1, alpha_pos_SCZ_draws))
-
-# CONTROL: Get mean, se and CIs
-mean(alpha_pos_HC_draws$average)
-std.error(alpha_pos_HC_draws$average)
-confint(lm(average ~ 1, alpha_pos_HC_draws))
-
-# COMPARISON with hypothesis test
+# Combine in dataframe
 alpha_pos_compare = data.frame(cbind(alpha_pos_SCZ_draws$average, alpha_pos_HC_draws$average))
 colnames(alpha_pos_compare) = c("SCZ", "HC")
+
+# SCZ: Get mean, se and CIs
+brms::hypothesis(alpha_pos_compare, "SCZ = 0")
+#mean(alpha_pos_SCZ_draws$average)
+#std.error(alpha_pos_SCZ_draws$average)
+#confint(lm(average ~ 1, alpha_pos_SCZ_draws))
+
+# CONTROL: Get mean, se and CIs
+brms::hypothesis(alpha_pos_compare, "HC = 0")
+#mean(alpha_pos_HC_draws$average)
+#std.error(alpha_pos_HC_draws$average)
+#confint(lm(average ~ 1, alpha_pos_HC_draws))
+
+# COMPARISON with hypothesis test
 brms::hypothesis(alpha_pos_compare, "HC > SCZ", alpha=0.025)
 
 # PLOTS
@@ -114,15 +118,21 @@ alpha_neg_HC_draws = alpha_neg_draws[, grepl( "Control" , names(alpha_neg_draws)
 alpha_neg_SCZ_draws$average = rowMeans(alpha_neg_SCZ_draws)
 alpha_neg_HC_draws$average = rowMeans(alpha_neg_HC_draws)
 
+# Combine in dataframe
+alpha_neg_compare = data.frame(cbind(alpha_neg_SCZ_draws$average, alpha_neg_HC_draws$average))
+colnames(alpha_neg_compare) = c("SCZ", "HC")
+
 # SCZ: Get mean, se and CIs
-mean(alpha_neg_SCZ_draws$average)
-std.error(alpha_neg_SCZ_draws$average)
-confint(lm(average ~ 1, alpha_neg_SCZ_draws))
+brms::hypothesis(alpha_neg_compare, "SCZ = 0")
+#mean(alpha_neg_SCZ_draws$average)
+#std.error(alpha_neg_SCZ_draws$average)
+#confint(lm(average ~ 1, alpha_neg_SCZ_draws))
 
 # CONTROL: Get mean, se and CIs
-mean(alpha_neg_HC_draws$average)
-std.error(alpha_neg_HC_draws$average)
-confint(lm(average ~ 1, alpha_neg_HC_draws))
+brms::hypothesis(alpha_neg_compare, "HC = 0")
+#mean(alpha_neg_HC_draws$average)
+#std.error(alpha_neg_HC_draws$average)
+#confint(lm(average ~ 1, alpha_neg_HC_draws))
 
 # COMPARISON with hypothesis test
 alpha_neg_compare = data.frame(cbind(alpha_neg_SCZ_draws$average, alpha_neg_HC_draws$average))
@@ -183,19 +193,23 @@ f_HC_draws = f_draws[, grepl( "Control" , names(f_draws))]
 f_SCZ_draws$average = rowMeans(f_SCZ_draws)
 f_HC_draws$average = rowMeans(f_HC_draws)
 
-# SCZ: get mean, se and CIs
-mean(f_SCZ_draws$average)
-std.error(f_SCZ_draws$average)
-confint(lm(average ~ 1, f_SCZ_draws))
-
-# CONTROL: get mean, se and CIs
-mean(f_HC_draws$average)
-std.error(f_HC_draws$average)
-confint(lm(average ~ 1, f_HC_draws))
-
-# COMPARISON with hypothesis test
+# Combine in dataframe 
 f_compare = data.frame(cbind(f_SCZ_draws$average, f_HC_draws$average))
 colnames(f_compare) = c("SCZ", "HC")
+
+# SCZ: get mean, se and CIs
+brms::hypothesis(f_compare, "SCZ = 0")
+#mean(f_SCZ_draws$average)
+#std.error(f_SCZ_draws$average)
+#confint(lm(average ~ 1, f_SCZ_draws))
+
+# CONTROL: get mean, se and CIs
+brms::hypothesis(f_compare, "HC = 0")
+#mean(f_HC_draws$average)
+#std.error(f_HC_draws$average)
+#confint(lm(average ~ 1, f_HC_draws))
+
+# COMPARISON with hypothesis test
 brms::hypothesis(f_compare, "SCZ - HC > 0", alpha=0.025)
 
 

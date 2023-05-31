@@ -150,6 +150,7 @@ cm
 ev = cvms::evaluate(data=true_pred, target_col="sim_data", prediction_cols="best_weights", type="multinomial")
 cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_normalized = F, add_col_percentages = T,
                             palette="Blues",
+                            digits=2,
                             font_counts = font(size = 2.8, fontface ="bold"),
                             font_col_percentages = font(size = 2.5, vjust = -1.3, fontface = "plain"),
                             sums_settings = sum_tile_settings(
@@ -157,12 +158,13 @@ cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_norma
                                   tc_tile_border_color = "black")) +
   ggplot2::labs(x = "True Model", y = "Inferred Model")
 
-#ggsave("cm_best_weights.png", width = 5, height = 4)
+ggsave("cm_best_weights.png", width = 5, height = 4)
 
 # Based on elpd 
 ev = cvms::evaluate(data=true_pred, target_col="sim_data", prediction_cols="best_compare", type="multinomial")
 cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_normalized = F, add_col_percentages = T,
                             palette="Blues",
+                            digits=2,
                             font_counts = font(size = 2.8, fontface ="bold"),
                             font_col_percentages = font(size = 2.5, vjust = -1.3, fontface = "plain"),
                             sums_settings = sum_tile_settings(
@@ -170,7 +172,7 @@ cvms::plot_confusion_matrix(ev, add_sums = T, add_row_percentages = F, add_norma
                                   tc_tile_border_color = "black")) +
   ggplot2::labs(x = "True Model", y = "Inferred Model")
 
-#ggsave("cm_best_compare.png", width = 5, height = 4)
+ggsave("cm_best_compare.png", width = 5, height = 4)
 ```
 
 # Confusion matrix of average stacking weights

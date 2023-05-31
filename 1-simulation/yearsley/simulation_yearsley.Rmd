@@ -24,8 +24,8 @@ To simulate data with the run_simulation function, specify the following paramet
 * p: punishment learning rate (0-1)
 * d: decision consistency (-inf to + inf)
 * lambda: disengagement/focus parameter (0-1)
-* switch1: continuity parameter (0-1)
-* switch2: continuity parameter (0-1)
+* switch1: continuation parameter (0-1)
+* switch2: continuation parameter (0-1)
 
 ### FIGURE 2 PLOTS ###
 ```{r}
